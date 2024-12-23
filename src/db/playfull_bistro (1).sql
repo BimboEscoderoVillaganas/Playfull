@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Dec 22, 2024 at 06:03 AM
+-- Generation Time: Dec 23, 2024 at 11:30 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -20,6 +20,32 @@ SET time_zone = "+00:00";
 --
 -- Database: `playfull_bistro`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `products`
+--
+
+CREATE TABLE `products` (
+  `id` int(11) NOT NULL,
+  `image` varchar(255) NOT NULL,
+  `product_name` varchar(255) NOT NULL,
+  `description` text NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `products`
+--
+
+INSERT INTO `products` (`id`, `image`, `product_name`, `description`, `quantity`, `price`, `created_at`) VALUES
+(18, 'product_img/Screenshot (338).png', 'qw', 'cdf', 12, 43.00, '2024-12-23 21:09:50'),
+(19, 'product_img/scree.png', 'sacfd', 'adc', 21, 21.00, '2024-12-23 21:14:49'),
+(20, 'product_img/4.png', '2', '3r', 3, 213.00, '2024-12-23 21:15:05'),
+(21, 'product_img/P3.png', 'fdv ', 'vf', 123, 1.00, '2024-12-23 21:15:33');
 
 -- --------------------------------------------------------
 
@@ -51,6 +77,12 @@ INSERT INTO `users` (`id`, `username`, `password`, `email`, `created_at`, `phone
 --
 
 --
+-- Indexes for table `products`
+--
+ALTER TABLE `products`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `users`
 --
 ALTER TABLE `users`
@@ -59,6 +91,12 @@ ALTER TABLE `users`
 --
 -- AUTO_INCREMENT for dumped tables
 --
+
+--
+-- AUTO_INCREMENT for table `products`
+--
+ALTER TABLE `products`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- AUTO_INCREMENT for table `users`

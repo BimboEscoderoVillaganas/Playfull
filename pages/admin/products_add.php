@@ -16,12 +16,75 @@ $stmt->execute([$user_id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 $username = $user['username'] ?? '';
 
-// Fetch all products from the database
-$stmt = $pdo->prepare("SELECT * FROM products");
-$stmt->execute();
-$products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-?>
+// Handle form submission
+$message = '';
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $productName = $_POST['product_name'];
+    $description = $_POST['description'];
+    $quantity = $_POST['quantity'];
+    $price = $_POST['price'];
+    $image = $_FILES['image'];
 
+    // Handle image upload
+    $targetDir = "product_img/";
+    $targetFile = $targetDir . basename($image["name"]);
+    $uploadOk = 1;
+    $imageFileType = strtolower(pathinfo($targetFile, PATHINFO_EXTENSION));
+
+    // Check if image file is a actual image or fake image
+    $check = getimagesize($image["tmp_name"]);
+    if ($check !== false) {
+        $uploadOk = 1;
+    } else {
+        $message = "File is not an image.";
+        $uploadOk = 0;
+    }
+
+    // Check if file already exists
+    if (file_exists($targetFile)) {
+        $message = "Sorry, file already exists.";
+        $uploadOk = 0;
+    }
+
+    // Check file size
+    if ($image["size"] > 500000) {
+        $message = "Sorry, your file is too large.";
+        $uploadOk = 0;
+    }
+
+    // Allow certain file formats
+    if ($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg" && $imageFileType != "gif") {
+        $message = "Sorry, only JPG, JPEG, PNG & GIF files are allowed.";
+        $uploadOk = 0;
+    }
+
+    // Check if $uploadOk is set to 0 by an error
+    if ($uploadOk == 0) {
+      $message = "Sorry, your file was not uploaded.";
+  // if everything is ok, try to upload file
+  } else {
+      if (move_uploaded_file($image["tmp_name"], $targetFile)) {
+          $message = "The file ". htmlspecialchars(basename($image["name"])). " has been uploaded.";
+
+          // Save product details to database
+          $stmt = $pdo->prepare("INSERT INTO products (image, product_name, description, quantity, price) VALUES (?, ?, ?, ?, ?)");
+          if ($stmt) {
+              $stmt->execute([$targetFile, $productName, $description, $quantity, $price]);
+
+              if ($stmt->rowCount() > 0) {
+                  $message = "New product added successfully.";
+              } else {
+                  $message = "Error: " . $stmt->errorInfo()[2];
+              }
+          } else {
+              $message = "Error: Failed to prepare the SQL statement.";
+          }
+      } else {
+          $message = "Sorry, there was an error uploading your file.";
+      }
+  }
+}
+?>
 
 
 <!DOCTYPE html>
@@ -66,12 +129,6 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="../../assets/css/kaiadmin.min.css" />
 
   </head>
-  <style>
-        .card-img-top {
-            height: 200px;
-            object-fit: cover;
-        }
-    </style>
   <body>
     <div class="wrapper">
       <!-- Sidebar -->
@@ -142,13 +199,13 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </span>
                 <h4 class="text-section">Product Management</h4>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
               <a href="products.php">
                   <i class="bi bi-box-seam me-2"></i>
                   <p>Products</p>
                 </a>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
                   <a href="products_add.php">
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
@@ -371,26 +428,51 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         <div class="container">
           <div class="page-inner">
-
-          <h2 class="mt-5">All Products</h2>
+          <h1>Add New Product</h1>
         <div class="row">
-            <?php foreach ($products as $product): ?>
-                <div class="col-md-4 mb-4">
-                    <div class="card">
-                        <?php if (!empty($product['image'])): ?>
-                            <img src="<?php echo htmlspecialchars($product['image']); ?>" class="card-img-top" alt="<?php echo htmlspecialchars($product['product_name']); ?>">
-                        <?php endif; ?>
-                        <div class="card-body">
-                            <h5 class="card-title"><?php echo htmlspecialchars($product['product_name']); ?></h5>
-                            <p class="card-text"><?php echo htmlspecialchars($product['description']); ?></p>
-                            <p class="card-text"><strong>Quantity:</strong> <?php echo htmlspecialchars($product['quantity']); ?></p>
-                            <p class="card-text"><strong>Price:</strong> ₱<?php echo htmlspecialchars($product['price']); ?></p>
-                        </div>
+            <div class="col-md-6">
+                <form action="products_add.php" method="post" enctype="multipart/form-data" id="productForm">
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Product Image</label>
+                        <input type="file" class="form-control" id="image" name="image" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="product_name" class="form-label">Product Name</label>
+                        <input type="text" class="form-control" id="product_name" name="product_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Quantity</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="price" class="form-label">Price</label>
+                        <input type="number" step="0.01" class="form-control" id="price" name="price" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Add Product</button>
+                </form>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                  <h1 style="text-align:center;">Product Preview</h1>
+                    <div class="card-body">
+                        <h5 class="card-title">Product Name: <span id="preview_product_name" style="font-weight: bold; color: blue;"></span></h5>
+                        <p class="card-text">Description: <span id="preview_description" style="font-weight: bold; color: blue;"></span></p>
+                        <p class="card-text">Quantity: <span id="preview_quantity" style="font-weight: bold; color: blue;">0</span></p>
+                        <p class="card-text">Price: ₱<span id="preview_price" style="font-weight: bold; color: blue;">0.00</span></p>
+                        <img id="preview_image" src="#" alt="Product Image" class="img-fluid" style="display: none;">
                     </div>
                 </div>
-            <?php endforeach; ?>
+            </div>
         </div>
-        
+        <?php if (!empty($message)): ?>
+        <script>
+            alert('<?php echo $message; ?>');
+        </script>
+    <?php endif; ?>
           </div>
         </div>
 
