@@ -277,12 +277,12 @@ body {
 
     .nav-links {
         display: flex;
-        flex-direction: column;
+        flex-direction: row; /* Changed to row */
         gap: 10px;
-        align-items: flex-start;
+        align-items: center; /* Changed to center */
     }
     .nav-links li {
-        margin-top: 10px;
+        margin-top: 0; /* Changed to 0 */
     }
     .login-btn {
         padding: 8px 16px;
