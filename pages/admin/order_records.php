@@ -12,42 +12,43 @@ if (!isset($_SESSION['user_id'])) {
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
 
-// Get the current page name
-$current_page = basename($_SERVER['PHP_SELF']);
-
 // Fetch orders and order details, excluding paid orders
 $query = "
-    SELECT o.order_number, o.total_amount, o.created_at, od.product_name, od.quantity
+    SELECT o.order_number, o.total_amount, o.created_at, GROUP_CONCAT(od.product_name SEPARATOR '|') AS product_names, GROUP_CONCAT(od.quantity SEPARATOR '|') AS quantities
     FROM orders o
     JOIN order_details od ON o.id = od.order_id
     LEFT JOIN paid p ON o.id = p.order_id
     WHERE p.order_id IS NULL
-    ORDER BY o.created_at ASC, o.order_number, od.product_name
+    GROUP BY o.order_number, o.total_amount, o.created_at
+    ORDER BY o.created_at ASC, o.order_number
 ";
 $stmt = $pdo->query($query);
 
 $orders = [];
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    // Combine order_number and created_at to ensure uniqueness
-    $order_key = $row['order_number'] . '_' . $row['created_at'];
+    // Split concatenated product names and quantities into arrays
+    $productNames = explode('|', $row['product_names']);
+    $quantities = explode('|', $row['quantities']);
 
-    // Initialize the order if it doesn't already exist
-    if (!isset($orders[$order_key])) {
-        $orders[$order_key] = [
-            'order_number' => $row['order_number'],
-            'created_at' => $row['created_at'],
-            'total_amount' => $row['total_amount'],
-            'details' => []
+    // Initialize order details
+    $details = [];
+    foreach ($productNames as $index => $productName) {
+        $details[] = [
+            'product_name' => $productName,
+            'quantity' => $quantities[$index]
         ];
     }
 
-    // Add order details
-    $orders[$order_key]['details'][] = [
-        'product_name' => $row['product_name'],
-        'quantity' => $row['quantity']
+    // Store grouped order data
+    $orders[] = [
+        'order_number' => $row['order_number'],
+        'created_at' => $row['created_at'],
+        'total_amount' => $row['total_amount'],
+        'details' => $details
     ];
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -433,7 +434,6 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                         <div class="mt-3 d-flex justify-content-between">
                             <a href="#" onclick="confirmDelete('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-danger btn-sm">Delete</a>
                             <a href="edit_order.php?order_number=<?php echo htmlspecialchars($order['order_number']); ?>&created_at=<?php echo htmlspecialchars($order['created_at']); ?>" class="btn btn-secondary btn-sm">Edit</a>
-
                             <a href="#" onclick="markPaid('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-success btn-sm">Paid</a>
                         </div>
                     </div>

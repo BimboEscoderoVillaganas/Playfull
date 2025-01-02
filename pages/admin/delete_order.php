@@ -27,6 +27,17 @@ if ($order_number && $created_at) {
         if ($order) {
             $order_id = $order['id'];
 
+            // Fetch the order details before deletion
+            $stmt = $pdo->prepare("SELECT product_id, quantity FROM order_details WHERE order_id = ?");
+            $stmt->execute([$order_id]);
+            $orderDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Restore quantities in the products table
+            $updateStmt = $pdo->prepare("UPDATE products SET quantity = quantity + ? WHERE id = ?");
+            foreach ($orderDetails as $detail) {
+                $updateStmt->execute([$detail['quantity'], $detail['product_id']]);
+            }
+
             // Delete from order_details table using order_id
             $stmt = $pdo->prepare("DELETE FROM order_details WHERE order_id = ?");
             $stmt->execute([$order_id]);
@@ -38,6 +49,10 @@ if ($order_number && $created_at) {
 
         // Commit the transaction
         $pdo->commit();
+
+        // Redirect with success message
+        header('Location: order_records.php?success=Order deleted successfully');
+        exit();
     } catch (Exception $e) {
         // Rollback the transaction in case of an error
         $pdo->rollBack();
@@ -45,10 +60,6 @@ if ($order_number && $created_at) {
         header('Location: order_records.php?error=Unable to delete the order');
         exit();
     }
-
-    // Redirect back to the order records page
-    header('Location: order_records.php?success=Order deleted successfully');
-    exit();
 } else {
     header('Location: order_records.php?error=Invalid request');
     exit();
