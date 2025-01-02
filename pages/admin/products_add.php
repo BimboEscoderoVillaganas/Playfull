@@ -175,6 +175,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                   <p>Dashboard</p>
                 </a>
               </li>
+              <li class="nav-item">
+              <a href="sales.php">
+                  <i class="far fa-chart-bar"></i>
+                  <p>Sales Report</p>
+                </a>
+              </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>
@@ -210,12 +216,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
                   </a>
-              </li>
-              <li class="nav-item">
-              <a href="sales.php">
-                  <i class="far fa-chart-bar"></i>
-                  <p>Sales Report</p>
-                </a>
               </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
@@ -508,8 +508,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     </div>
 
 
-    <!--   Core JS Files   -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
     <!-- jQuery Scrollbar -->
 <script>
         document.getElementById('product_name').addEventListener('input', function() {

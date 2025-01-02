@@ -1,26 +1,55 @@
 <?php
-// Start the session
-session_start();
+// Database connection
+include '../../src/db/db_connection.php';
 
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
-    // Redirect to login.php if no user is logged in
     header('Location: ../../login.php');
     exit();
 }
 
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
+$order_number = isset($_GET['order_number']) ? htmlspecialchars($_GET['order_number']) : null;
 
-// Get the current page name
-$current_page = basename($_SERVER['PHP_SELF']);
+// Fetch products from the database
+$query = "SELECT id, product_name, price FROM products";
+$stmt = $pdo->query($query);
+$products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch order details if editing
+$order = [];
+$orderDetails = [];
+$totalAmount = 0;
+
+if ($order_number) {
+    // Fetch order data
+    $query = "SELECT * FROM orders WHERE order_number = ?";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([$order_number]);
+    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // Fetch order details
+    $query = "SELECT * FROM order_details WHERE order_number = ?";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([$order_number]);
+    $orderDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Calculate total amount
+    foreach ($orderDetails as $detail) {
+        $totalAmount += $detail['quantity'] * $detail['price'];
+    }
+}
 ?>
+
+
+
 
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro Employee List</title>
+    <title>PlayFull Bistro add order</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -122,7 +151,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                   <p>Add Orders</p>
                 </a>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
               <a href="order_records.php">
                   <i class="bi bi-list-ul me-2"></i>
                   <p>Order Records</p>
@@ -152,7 +181,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </span>
                 <h4 class="text-section"><i class="bi bi-gear me-2"></i>Accounts Settings</h4>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
                 <a data-bs-toggle="collapse" href="#base">
                   <i class="fas fa-layer-group"></i>
                   <p>Account List</p>
@@ -160,7 +189,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
                 <div class="collapse" id="base">
                   <ul class="nav nav-collapse">
-                    <li class="active">
+                    <li>
                       <a href="employee.php">
                         <span class="sub-item"><i class="bi bi-people me-2"></i>Empployee List</span>
                       </a>
@@ -356,10 +385,60 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </div>
 
         <div class="container">
-          <div class="page-inner">
-            Employee List
-          </div>
+    <div class="page-inner">
+        <h2 class="mt-5"><?php echo $order_number ? 'Edit Order' : 'Add Order'; ?></h2>
+        <div class="row">
+            <!-- Products List -->
+            <div class="col-md-6" style="max-height: 400px; overflow-y: auto;">
+                <h3>Products</h3>
+                <ul class="list-group" id="productList">
+                    <?php foreach ($products as $product): ?>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <?php echo htmlspecialchars($product['product_name']); ?> - ₱<?php echo htmlspecialchars($product['price']); ?>
+                            <button class="btn btn-primary btn-sm" onclick="selectProduct(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['product_name']); ?>', <?php echo $product['price']; ?>)">Select</button>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+
+            <!-- Selected Products -->
+            <div class="col-md-6">
+                <h3>Selected Products</h3>
+                <form id="orderForm" action="submit_edit.php" method="POST">
+                    <div class="form-group d-flex justify-content-between align-items-center">
+                        <div>
+                            <label for="orderNumber">Order Number</label>
+                            <input type="text" id="orderNumber" name="order_number" class="form-control" value="<?php echo $order_number; ?>" readonly>
+                        </div>
+                        <div id="totalAmount" class="ml-3 mt-4">
+                            <span style="font-weight: bold; font-size: 12px;">Total Amount: </span>
+                            <span id="totalAmountValue" style="font-weight: bold; font-size: 12px; color: red;">₱<?php echo number_format($totalAmount, 2); ?></span>
+                        </div>
+                    </div>
+
+                    <div id="selectedProducts">
+                        <?php foreach ($orderDetails as $detail): ?>
+                            <div class="selected-product mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span><?php echo htmlspecialchars($detail['product_name']); ?> - ₱<?php echo htmlspecialchars($detail['price']); ?></span>
+                                    <input type="hidden" name="product_ids[]" value="<?php echo $detail['product_id']; ?>">
+                                    <input type="hidden" name="product_prices[]" value="<?php echo $detail['price']; ?>">
+                                    <input type="hidden" name="product_names[]" value="<?php echo htmlspecialchars($detail['product_name']); ?>">
+                                    <input type="number" name="quantities[]" class="form-control ml-2" value="<?php echo $detail['quantity']; ?>" required oninput="updateTotalAmount()">
+                                    <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this)">Delete</button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="submit" class="btn btn-success mt-3"><?php echo $order_number ? 'Update Order' : 'Submit Order'; ?></button>
+                </form>
+            </div>
         </div>
+    </div>
+</div>
+
+
+
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -392,6 +471,47 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     </div>
 
+    
+    <script>
+function selectProduct(id, name, price) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span>${name} - ₱${price}</span>
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="hidden" name="product_names[]" value="${name}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this)">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+function deleteProduct(button) {
+    button.parentElement.parentElement.remove();
+    updateTotalAmount();
+}
+
+function updateTotalAmount() {
+    var totalAmount = 0;
+    var quantities = document.getElementsByName('quantities[]');
+    var prices = document.getElementsByName('product_prices[]');
+
+    for (var i = 0; i < quantities.length; i++) {
+        var quantity = parseFloat(quantities[i].value);
+        var price = parseFloat(prices[i].value);
+        if (!isNaN(quantity) && !isNaN(price)) {
+            totalAmount += quantity * price;
+        }
+    }
+    document.getElementById('totalAmountValue').innerText = '₱' + totalAmount.toFixed(2);
+}
+</script>
+    <!-- Logout confirmation dialog -->
         <script>
     function confirmLogout() {
         if (confirm("Are you sure you want to logout?")) {
@@ -424,7 +544,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     <!-- jQuery Vector Maps -->
     <script src="../../assets/js/plugin/jsvectormap/jsvectormap.min.js"></script>
-    <script src="../../assets/js/plugin/jsvectormap/world.js"></script>
+    <script src="assets/js/plugin/jsvectormap/world.js"></script>
 
     <!-- Sweet Alert -->
     <script src="../../assets/js/plugin/sweetalert/sweetalert.min.js"></script>

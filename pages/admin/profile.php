@@ -104,6 +104,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
                   <p>Dashboard</p>
                 </a>
               </li>
+              <li class="nav-item">
+              <a href="sales.php">
+                  <i class="far fa-chart-bar"></i>
+                  <p>Sales Report</p>
+                </a>
+              </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>
@@ -139,12 +145,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
                   </a>
-              </li>
-              <li class="nav-item">
-              <a href="sales.php">
-                  <i class="far fa-chart-bar"></i>
-                  <p>Sales Report</p>
-                </a>
               </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">

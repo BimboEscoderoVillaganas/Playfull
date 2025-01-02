@@ -16,10 +16,10 @@
                 <img src="assets/img/logo.webp" alt="PlayFullBistro Logo" class="logo-img" style="margin:  0px 20px 0px -20px">
             </div>
             <nav>
-                <ul class="nav-links">
+                <ul class="nav-links"><!--
                     <li><a href="#menu">Menu</a></li>
                     <li><a href="#about">About</a></li>
-                    <li><a href="#contact">Contact</a></li>
+                    <li><a href="#contact">Contact</a></li>-->
                     <li><a href="login.php" class="login-btn"style="margin:  -10px 0px 0px 0px">Login</a></li>
                 </ul>
             </nav>

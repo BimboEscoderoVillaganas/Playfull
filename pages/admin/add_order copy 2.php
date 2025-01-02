@@ -20,7 +20,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro Employee List</title>
+    <title>PlayFull Bistro add order</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -116,7 +116,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </span>
                 <h4 class="text-section">Order Management</h4>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
               <a href="add_order.php">
                   <i class="bi bi-plus-circle me-2"></i>
                   <p>Add Orders</p>
@@ -152,7 +152,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </span>
                 <h4 class="text-section"><i class="bi bi-gear me-2"></i>Accounts Settings</h4>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
                 <a data-bs-toggle="collapse" href="#base">
                   <i class="fas fa-layer-group"></i>
                   <p>Account List</p>
@@ -160,7 +160,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
                 <div class="collapse" id="base">
                   <ul class="nav nav-collapse">
-                    <li class="active">
+                    <li>
                       <a href="employee.php">
                         <span class="sub-item"><i class="bi bi-people me-2"></i>Empployee List</span>
                       </a>
@@ -357,7 +357,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         <div class="container">
           <div class="page-inner">
-            Employee List
+            Add order
           </div>
         </div>
 
@@ -424,7 +424,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     <!-- jQuery Vector Maps -->
     <script src="../../assets/js/plugin/jsvectormap/jsvectormap.min.js"></script>
-    <script src="../../assets/js/plugin/jsvectormap/world.js"></script>
+    <script src="assets/js/plugin/jsvectormap/world.js"></script>
 
     <!-- Sweet Alert -->
     <script src="../../assets/js/plugin/sweetalert/sweetalert.min.js"></script>

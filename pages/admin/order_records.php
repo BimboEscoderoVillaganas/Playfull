@@ -1,6 +1,6 @@
 <?php
-// Start the session
-session_start();
+// Database connection
+require_once '../../src/db/db_connection.php';
 
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -14,8 +14,40 @@ $username = htmlspecialchars($_SESSION['username']);
 
 // Get the current page name
 $current_page = basename($_SERVER['PHP_SELF']);
-?>
 
+// Fetch orders and order details, excluding paid orders
+$query = "
+    SELECT o.order_number, o.total_amount, o.created_at, od.product_name, od.quantity
+    FROM orders o
+    JOIN order_details od ON o.id = od.order_id
+    LEFT JOIN paid p ON o.id = p.order_id
+    WHERE p.order_id IS NULL
+    ORDER BY o.created_at ASC, o.order_number, od.product_name
+";
+$stmt = $pdo->query($query);
+
+$orders = [];
+while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    // Combine order_number and created_at to ensure uniqueness
+    $order_key = $row['order_number'] . '_' . $row['created_at'];
+
+    // Initialize the order if it doesn't already exist
+    if (!isset($orders[$order_key])) {
+        $orders[$order_key] = [
+            'order_number' => $row['order_number'],
+            'created_at' => $row['created_at'],
+            'total_amount' => $row['total_amount'],
+            'details' => []
+        ];
+    }
+
+    // Add order details
+    $orders[$order_key]['details'][] = [
+        'product_name' => $row['product_name'],
+        'quantity' => $row['quantity']
+    ];
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -58,6 +90,18 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <link rel="stylesheet" href="../../assets/css/kaiadmin.min.css" />
 
   </head>
+
+  <style>
+    .border {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+    }
+    .list-group-item {
+        border: none;
+        padding-left: 0;
+    }
+</style>
+
   <body>
     <div class="wrapper">
       <!-- Sidebar -->
@@ -104,6 +148,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
                   <p>Dashboard</p>
                 </a>
               </li>
+              <li class="nav-item">
+              <a href="sales.php">
+                  <i class="far fa-chart-bar"></i>
+                  <p>Sales Report</p>
+                </a>
+              </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>
@@ -139,12 +189,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
                   </a>
-              </li>
-              <li class="nav-item">
-              <a href="sales.php">
-                  <i class="far fa-chart-bar"></i>
-                  <p>Sales Report</p>
-                </a>
               </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
@@ -355,11 +399,51 @@ $current_page = basename($_SERVER['PHP_SELF']);
           <!-- End Navbar -->
         </div>
 
-        <div class="container">
-          <div class="page-inner">
-            order Records
-          </div>
+        <div class="container mt-5">
+    <div class="page-inner">
+        <h2 class="mb-4">Order Records</h2>
+        <div class="row">
+            <?php foreach ($orders as $order): ?>
+                <div class="col-md-4 mb-4">
+                    <div class="d-flex flex-column border p-3 h-100">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <div style="font-size: 10px;">
+                                    <strong>Date Ordered:</strong> <?php echo htmlspecialchars(date('Y-m-d', strtotime($order['created_at']))); ?>
+                                </div>
+                                <div style="font-size: 14px;">
+                                    <strong>Order Number:</strong> <span style="font-size: 15px; color: blue;"><?php echo htmlspecialchars($order['order_number']); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3 flex-grow-1">
+                            <strong>Orders:</strong>
+                            <ul class="list-group mt-2">
+                                <?php foreach ($order['details'] as $detail): ?>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span><?php echo htmlspecialchars($detail['product_name']); ?></span>
+                                        <span class="float-right">x<?php echo htmlspecialchars($detail['quantity']); ?></span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                        <div class="mt-auto text-right">
+                            <strong>Total Amount:</strong> <span style="color: red;">₱<?php echo htmlspecialchars($order['total_amount']); ?></span>
+                        </div>
+                        <div class="mt-3 d-flex justify-content-between">
+                            <a href="#" onclick="confirmDelete('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-danger btn-sm">Delete</a>
+                            <a href="edit_order.php?order_number=<?php echo htmlspecialchars($order['order_number']); ?>&created_at=<?php echo htmlspecialchars($order['created_at']); ?>" class="btn btn-secondary btn-sm">Edit</a>
+
+                            <a href="#" onclick="markPaid('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-success btn-sm">Paid</a>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
         </div>
+    </div>
+</div>
+
+
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -391,6 +475,31 @@ $current_page = basename($_SERVER['PHP_SELF']);
       </div>
 
     </div>
+
+
+    <script>
+      // Confirm delete
+function confirmDelete(orderNumber, createdAt) {
+    if (confirm("Are you sure you want to delete this order?")) {
+        window.location.href = "delete_order.php?order_number=" + encodeURIComponent(orderNumber) + "&created_at=" + encodeURIComponent(createdAt);
+    }
+}
+
+// Mark as paid
+function confirmDelete(orderNumber, createdAt) {
+    if (confirm("Are you sure you want to delete this order?")) {
+        window.location.href = "delete_order.php?order_number=" + orderNumber + "&created_at=" + createdAt;
+    }
+}
+// Mark as paid
+function markPaid(orderNumber, createdAt) {
+    if (confirm("Are you sure you want to mark this order as paid?")) {
+        window.location.href = "mark_paid.php?order_number=" + orderNumber + "&created_at=" + createdAt;
+    }
+}
+
+</script>
+
 
         <script>
     function confirmLogout() {

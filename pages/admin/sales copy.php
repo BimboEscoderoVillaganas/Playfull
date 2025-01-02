@@ -1,6 +1,6 @@
 <?php
-// Start the session
-session_start();
+// Database connection
+require_once '../../src/db/db_connection.php';
 
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -14,13 +14,86 @@ $username = htmlspecialchars($_SESSION['username']);
 
 // Get the current page name
 $current_page = basename($_SERVER['PHP_SELF']);
+
+
+// Fetch total amount of paid orders per day
+$query = "
+    SELECT SUM(o.total_amount) AS total_amount
+    FROM orders o
+    JOIN paid p ON o.id = p.order_id
+    WHERE DATE(p.paid_at) = CURDATE()
+";
+$stmt = $pdo->query($query);
+$daily_total = $stmt->fetch(PDO::FETCH_ASSOC)['total_amount'] ?? 0;
+
+// Fetch total amount of paid orders per week
+$query = "
+    SELECT SUM(o.total_amount) AS total_amount
+    FROM orders o
+    JOIN paid p ON o.id = p.order_id
+    WHERE YEARWEEK(p.paid_at, 1) = YEARWEEK(CURDATE(), 1)
+";
+$stmt = $pdo->query($query);
+$weekly_total = $stmt->fetch(PDO::FETCH_ASSOC)['total_amount'] ?? 0;
+
+// Fetch total amount of paid orders per month
+$query = "
+    SELECT SUM(o.total_amount) AS total_amount
+    FROM orders o
+    JOIN paid p ON o.id = p.order_id
+    WHERE MONTH(p.paid_at) = MONTH(CURDATE()) AND YEAR(p.paid_at) = YEAR(CURDATE())
+";
+$stmt = $pdo->query($query);
+$monthly_total = $stmt->fetch(PDO::FETCH_ASSOC)['total_amount'] ?? 0;
+
+// Fetch sales data for each day of the current and previous week
+$query = "
+    SELECT DATE_FORMAT(DATE(p.paid_at) - INTERVAL WEEKDAY(p.paid_at) DAY, '%Y-%m-%d') AS week_start, 
+           SUM(o.total_amount) AS total_amount
+    FROM orders o
+    JOIN paid p ON o.id = p.order_id
+    WHERE YEAR(p.paid_at) = YEAR(CURDATE())
+    GROUP BY week_start
+";
+$stmt = $pdo->query($query);
+$weekly_sales = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+// Fetch sales data for each week of the current and previous month
+$query = "
+    SELECT DATE_FORMAT(DATE(p.paid_at) - INTERVAL WEEKDAY(p.paid_at) DAY, '%Y-%m-%d') AS week_start, 
+           SUM(o.total_amount) AS total_amount
+    FROM orders o
+    JOIN paid p ON o.id = p.order_id
+    WHERE YEAR(p.paid_at) = YEAR(CURDATE())
+    GROUP BY week_start
+";
+$stmt = $pdo->query($query);
+$weekly_sales = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+
+// Fetch sales data for each month of the current and previous year
+$query = "
+    SELECT DATE_FORMAT(p.paid_at, '%M') AS month_name, 
+           SUM(o.total_amount) AS total_amount
+    FROM orders o
+    JOIN paid p ON o.id = p.order_id
+    WHERE YEAR(p.paid_at) = YEAR(CURDATE())
+    GROUP BY month_name
+";
+$stmt = $pdo->query($query);
+$monthly_sales = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
+
+
 
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro Employee List</title>
+    <title>PlayFull Bistro Sales Report</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -56,6 +129,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <link rel="stylesheet" href="../../assets/css/bootstrap.min.css" />
     <link rel="stylesheet" href="../../assets/css/plugins.min.css" />
     <link rel="stylesheet" href="../../assets/css/kaiadmin.min.css" />
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   </head>
   <body>
@@ -104,7 +179,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                   <p>Dashboard</p>
                 </a>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
               <a href="sales.php">
                   <i class="far fa-chart-bar"></i>
                   <p>Sales Report</p>
@@ -152,7 +227,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </span>
                 <h4 class="text-section"><i class="bi bi-gear me-2"></i>Accounts Settings</h4>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
                 <a data-bs-toggle="collapse" href="#base">
                   <i class="fas fa-layer-group"></i>
                   <p>Account List</p>
@@ -160,7 +235,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
                 <div class="collapse" id="base">
                   <ul class="nav nav-collapse">
-                    <li class="active">
+                    <li>
                       <a href="employee.php">
                         <span class="sub-item"><i class="bi bi-people me-2"></i>Empployee List</span>
                       </a>
@@ -355,11 +430,66 @@ $current_page = basename($_SERVER['PHP_SELF']);
           <!-- End Navbar -->
         </div>
 
-        <div class="container">
-          <div class="page-inner">
-            Employee List
-          </div>
+        <div class="container mt-5">
+        <div class="page-inner">
+            <h2 class="mb-4">Sales Report</h2>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card text-white bg-primary mb-3">
+                        <div class="card-header">Total Amount (Today)</div>
+                        <div class="card-body">
+                            <h5 class="card-title">₱<?php echo number_format($daily_total, 2); ?></h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-white bg-success mb-3">
+                        <div class="card-header">Total Amount (This Week)</div>
+                        <div class="card-body">
+                            <h5 class="card-title">₱<?php echo number_format($weekly_total, 2); ?></h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-white bg-info mb-3">
+                        <div class="card-header">Total Amount (This Month)</div>
+                        <div class="card-body">
+                            <h5 class="card-title">₱<?php echo number_format($monthly_total, 2); ?></h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Charts in Cards -->
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header text-center">Daily Sales</div>
+                        <div class="card-body">
+                            <canvas id="weeklySalesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header text-center">Weekly Sales</div>
+                        <div class="card-body">
+                            <canvas id="monthlySalesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header text-center">Monthly Sales</div>
+                        <div class="card-body">
+                            <canvas id="yearlySalesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+    </div>
+
+
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -392,6 +522,78 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     </div>
 
+    <script>
+        // Daily Sales Chart
+var weeklySalesCtx = document.getElementById('weeklySalesChart').getContext('2d');
+var dailyLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+var weeklySalesChart = new Chart(weeklySalesCtx, {
+    type: 'bar',
+    data: {
+        labels: dailyLabels,
+        datasets: [{
+            label: 'Sales (₱)',
+            data: <?php echo json_encode(array_column($weekly_sales, 'total_amount')); ?>,
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+// Weekly Sales Chart
+var monthlySalesCtx = document.getElementById('monthlySalesChart').getContext('2d');
+var weeklySalesChart = new Chart(monthlySalesCtx, {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode(array_column($weekly_sales, 'week_start')); ?>,
+        datasets: [{
+            label: 'Sales (₱)',
+            data: <?php echo json_encode(array_column($weekly_sales, 'total_amount')); ?>,
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+// Monthly Sales Chart
+var yearlySalesCtx = document.getElementById('yearlySalesChart').getContext('2d');
+var yearlySalesChart = new Chart(yearlySalesCtx, {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode(array_column($monthly_sales, 'month_name')); ?>,
+        datasets: [{
+            label: 'Sales (₱)',
+            data: <?php echo json_encode(array_column($monthly_sales, 'total_amount')); ?>,
+            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+            borderColor: 'rgba(153, 102, 255, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+    </script>
         <script>
     function confirmLogout() {
         if (confirm("Are you sure you want to logout?")) {

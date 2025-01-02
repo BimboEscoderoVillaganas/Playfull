@@ -1,7 +1,7 @@
 <?php
-// Start the session
-session_start();
 
+// Database connection
+include '../../src/db/db_connection.php';
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
     // Redirect to login.php if no user is logged in
@@ -14,6 +14,13 @@ $username = htmlspecialchars($_SESSION['username']);
 
 // Get the current page name
 $current_page = basename($_SERVER['PHP_SELF']);
+
+
+// Fetch products from the database using PDO
+$query = "SELECT id, product_name, price FROM products";
+$stmt = $pdo->query($query);
+$products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
 
 <!DOCTYPE html>
@@ -104,6 +111,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
                   <p>Dashboard</p>
                 </a>
               </li>
+              <li class="nav-item">
+              <a href="sales.php">
+                  <i class="far fa-chart-bar"></i>
+                  <p>Sales Report</p>
+                </a>
+              </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>
@@ -139,12 +152,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
                   </a>
-              </li>
-              <li class="nav-item">
-              <a href="sales.php">
-                  <i class="far fa-chart-bar"></i>
-                  <p>Sales Report</p>
-                </a>
               </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
@@ -356,10 +363,43 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </div>
 
         <div class="container">
-          <div class="page-inner">
-            Add order
-          </div>
+    <div class="page-inner">
+        <h2 class="mt-5">Add Order</h2>
+        <div class="row">
+            <!-- Left column: Display all products -->
+            <div class="col-md-6" style="max-height: 400px; overflow-y: auto;">
+                <h3>Products</h3>
+                <ul class="list-group" id="productList">
+                    <?php foreach ($products as $product): ?>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <?php echo htmlspecialchars($product['product_name']); ?> - ₱<?php echo htmlspecialchars($product['price']); ?>
+                            <button class="btn btn-primary btn-sm" onclick="selectProduct(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['product_name']); ?>', <?php echo $product['price']; ?>)">Select</button>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+
+            <!-- Right column: Display selected products with quantity input -->
+            <div class="col-md-6" style="position: sticky; top: 0;">
+                <h3>Selected Products</h3>
+                <form id="orderForm" action="submit_order.php" method="POST">
+                    <div class="form-group d-flex justify-content-between align-items-center">
+                        <div>
+                            <label for="orderNumber">Order Number</label>
+                            <input type="text" id="orderNumber" name="order_number" class="form-control" required>
+                        </div>
+                        <div id="totalAmount" class="ml-3 mt-4">
+                            <span style="font-weight: bold; font-size: 12px;">Total Amount: </span>
+                            <span id="totalAmountValue" style="font-weight: bold; font-size: 12px; color: red;">₱0.00</span>
+                        </div>
+                    </div>
+                    <div id="selectedProducts"></div>
+                    <button type="submit" class="btn btn-success mt-3">Submit Order</button>
+                </form>
+            </div>
         </div>
+    </div>
+</div>
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -392,6 +432,51 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     </div>
 
+    
+    <script>
+      // Select product and add to order form
+      
+function selectProduct(id, name, price) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span>${name} - ₱${price}</span>
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="hidden" name="product_names[]" value="${name}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this)">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+function deleteProduct(button) {
+    var productDiv = button.parentElement.parentElement;
+    productDiv.remove();
+    updateTotalAmount();
+}
+
+function updateTotalAmount() {
+    var totalAmount = 0;
+    var quantities = document.getElementsByName('quantities[]');
+    var prices = document.getElementsByName('product_prices[]');
+
+    for (var i = 0; i < quantities.length; i++) {
+        var quantity = parseFloat(quantities[i].value);
+        var price = parseFloat(prices[i].value);
+        if (!isNaN(quantity) && !isNaN(price)) {
+            totalAmount += quantity * price;
+        }
+    }
+
+    document.getElementById('totalAmountValue').innerText = '₱' + totalAmount.toFixed(2);
+}
+    </script>
+    <!-- Logout confirmation dialog -->
         <script>
     function confirmLogout() {
         if (confirm("Are you sure you want to logout?")) {

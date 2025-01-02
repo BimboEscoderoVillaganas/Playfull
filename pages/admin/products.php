@@ -118,6 +118,12 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                   <p>Dashboard</p>
                 </a>
               </li>
+              <li class="nav-item">
+              <a href="sales.php">
+                  <i class="far fa-chart-bar"></i>
+                  <p>Sales Report</p>
+                </a>
+              </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>
@@ -153,12 +159,6 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
                   </a>
-              </li>
-              <li class="nav-item">
-              <a href="sales.php">
-                  <i class="far fa-chart-bar"></i>
-                  <p>Sales Report</p>
-                </a>
               </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
@@ -369,10 +369,9 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <!-- End Navbar -->
         </div>
 
-        <div class="container">
-          <div class="page-inner">
-
-          <h2 class="mt-5">All Products</h2>
+        <div class="container"> 
+    <div class="page-inner">
+        <h2 class="mt-5">All Products</h2>
         <div class="row">
             <?php foreach ($products as $product): ?>
                 <div class="col-md-4 mb-4">
@@ -385,14 +384,48 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <p class="card-text"><?php echo htmlspecialchars($product['description']); ?></p>
                             <p class="card-text"><strong>Quantity:</strong> <?php echo htmlspecialchars($product['quantity']); ?></p>
                             <p class="card-text"><strong>Price:</strong> ₱<?php echo htmlspecialchars($product['price']); ?></p>
+                            <a href="product_edit.php?id=<?php echo $product['id']; ?>" class="btn btn-primary" style="font-size: 12px;">Edit</a>
+                            <button class="btn btn-secondary" onclick="showAddQuantityModal(<?php echo $product['id']; ?>, <?php echo $product['quantity']; ?>)" style="font-size: 12px;">
+                                Add Quantity
+                            </button>
+                            <button class="btn btn-danger" onclick="confirmDelete(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['image']); ?>')" style="font-size: 12px;">Delete</button>
                         </div>
                     </div>
                 </div>
             <?php endforeach; ?>
         </div>
-        
-          </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="addQuantityModal" tabindex="-1" aria-labelledby="addQuantityModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addQuantityModalLabel">Add Quantity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addQuantityForm">
+                    <input type="hidden" name="product_id" id="product_id">
+                    <div class="mb-3">
+                        <label for="existing_quantity" class="form-label">Existing Quantity</label>
+                        <input type="number" class="form-control" id="existing_quantity" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_quantity" class="form-label">Add Quantity</label>
+                        <input type="number" class="form-control" id="add_quantity" name="add_quantity" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="saveQuantity()">Save</button>
+            </div>
         </div>
+    </div>
+</div>
+
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -426,8 +459,7 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 
 
-    <!--   Core JS Files   -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
     <!-- jQuery Scrollbar -->
 <script>
         document.getElementById('product_name').addEventListener('input', function() {
@@ -479,6 +511,43 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 e.returnValue = '';
             }
         });
+
+       //Delete confirmation
+    function confirmDelete(productId, productImage) {
+        if (confirm('Are you sure you want to delete this product?')) {
+            window.location.href = 'product_delete.php?id=' + productId + '&image=' + encodeURIComponent(productImage);
+        }
+    }
+
+
+    function showAddQuantityModal(productId, existingQuantity) {
+    document.getElementById('product_id').value = productId;
+    document.getElementById('existing_quantity').value = existingQuantity;
+    document.getElementById('add_quantity').value = '';
+    const modal = new bootstrap.Modal(document.getElementById('addQuantityModal'));
+    modal.show();
+}
+
+function saveQuantity() {
+    const formData = new FormData(document.getElementById('addQuantityForm'));
+    fetch('update_quantity.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Quantity updated successfully!');
+            location.reload();
+        } else {
+            alert('Failed to update quantity: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating the quantity.');
+    });
+}
     </script>
     <!-- Logout confirmation -->
         <script>

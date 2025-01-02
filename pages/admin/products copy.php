@@ -1,6 +1,6 @@
 <?php
-// Start the session
-session_start();
+// Include the database connection file
+require_once '../../src/db/db_connection.php';
 
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -9,18 +9,26 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Get the logged-in user's name
-$username = htmlspecialchars($_SESSION['username']);
+// Fetch the username from the database
+$user_id = $_SESSION['user_id'];
+$stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
+$stmt->execute([$user_id]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+$username = $user['username'] ?? '';
 
-// Get the current page name
-$current_page = basename($_SERVER['PHP_SELF']);
+// Fetch all products from the database
+$stmt = $pdo->prepare("SELECT * FROM products");
+$stmt->execute();
+$products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
+
 
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro Employee List</title>
+    <title>PlayFull Bistro Products</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -58,6 +66,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <link rel="stylesheet" href="../../assets/css/kaiadmin.min.css" />
 
   </head>
+  <style>
+        .card-img-top {
+            height: 200px;
+            object-fit: cover;
+        }
+    </style>
   <body>
     <div class="wrapper">
       <!-- Sidebar -->
@@ -134,7 +148,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </span>
                 <h4 class="text-section">Product Management</h4>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
               <a href="products.php">
                   <i class="bi bi-box-seam me-2"></i>
                   <p>Products</p>
@@ -152,7 +166,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </span>
                 <h4 class="text-section"><i class="bi bi-gear me-2"></i>Accounts Settings</h4>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
                 <a data-bs-toggle="collapse" href="#base">
                   <i class="fas fa-layer-group"></i>
                   <p>Account List</p>
@@ -160,7 +174,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
                 <div class="collapse" id="base">
                   <ul class="nav nav-collapse">
-                    <li class="active">
+                    <li>
                       <a href="employee.php">
                         <span class="sub-item"><i class="bi bi-people me-2"></i>Empployee List</span>
                       </a>
@@ -312,8 +326,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
                       />
                     </div>
                     <span class="profile-username">
-                      <span class="op-7">Hi,</span>
-                      <span class="fw-bold"><?php echo $username; ?></span>
+                        <span class="op-7">Hi,</span>
+                        <span class="fw-bold"><?php echo $username; ?></span>
                     </span>
                   </a>
                   <ul class="dropdown-menu dropdown-user animated fadeIn">
@@ -355,11 +369,63 @@ $current_page = basename($_SERVER['PHP_SELF']);
           <!-- End Navbar -->
         </div>
 
-        <div class="container">
-          <div class="page-inner">
-            Employee List
-          </div>
+        <div class="container"> 
+    <div class="page-inner">
+        <h2 class="mt-5">All Products</h2>
+        <div class="row">
+            <?php foreach ($products as $product): ?>
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <?php if (!empty($product['image'])): ?>
+                            <img src="<?php echo htmlspecialchars($product['image']); ?>" class="card-img-top" alt="<?php echo htmlspecialchars($product['product_name']); ?>">
+                        <?php endif; ?>
+                        <div class="card-body">
+                            <h5 class="card-title"><?php echo htmlspecialchars($product['product_name']); ?></h5>
+                            <p class="card-text"><?php echo htmlspecialchars($product['description']); ?></p>
+                            <p class="card-text"><strong>Quantity:</strong> <?php echo htmlspecialchars($product['quantity']); ?></p>
+                            <p class="card-text"><strong>Price:</strong> ₱<?php echo htmlspecialchars($product['price']); ?></p>
+                            <a href="product_edit.php?id=<?php echo $product['id']; ?>" class="btn btn-primary" style="font-size: 12px;">Edit</a>
+                            <button class="btn btn-secondary" onclick="showAddQuantityModal(<?php echo $product['id']; ?>, <?php echo $product['quantity']; ?>)" style="font-size: 12px;">
+                                Add Quantity
+                            </button>
+                            <button class="btn btn-danger" onclick="confirmDelete(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['image']); ?>')" style="font-size: 12px;">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
         </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="addQuantityModal" tabindex="-1" aria-labelledby="addQuantityModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addQuantityModalLabel">Add Quantity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addQuantityForm">
+                    <input type="hidden" name="product_id" id="product_id">
+                    <div class="mb-3">
+                        <label for="existing_quantity" class="form-label">Existing Quantity</label>
+                        <input type="number" class="form-control" id="existing_quantity" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_quantity" class="form-label">Add Quantity</label>
+                        <input type="number" class="form-control" id="add_quantity" name="add_quantity" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="saveQuantity()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -392,6 +458,99 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     </div>
 
+
+    <!--   Core JS Files   -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery Scrollbar -->
+<script>
+        document.getElementById('product_name').addEventListener('input', function() {
+            document.getElementById('preview_product_name').textContent = this.value;
+        });
+
+        document.getElementById('description').addEventListener('input', function() {
+            document.getElementById('preview_description').textContent = this.value;
+        });
+
+        document.getElementById('quantity').addEventListener('input', function() {
+            document.getElementById('preview_quantity').textContent = this.value;
+        });
+
+        document.getElementById('price').addEventListener('input', function() {
+            document.getElementById('preview_price').textContent = parseFloat(this.value).toFixed(2);
+        });
+
+        document.getElementById('image').addEventListener('change', function() {
+            const [file] = this.files;
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('preview_image').src = e.target.result;
+                    document.getElementById('preview_image').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Confirmation before leaving the page
+        const form = document.getElementById('productForm');
+        const submitBtn = document.getElementById('submitBtn');
+        let isFormDirty = false;
+
+        form.addEventListener('input', (event) => {
+            if (event.target !== submitBtn) {
+                isFormDirty = true;
+            }
+        });
+
+        submitBtn.addEventListener('click', () => {
+            isFormDirty = false;
+        });
+
+        window.addEventListener('beforeunload', (e) => {
+            if (isFormDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
+       //Delete confirmation
+    function confirmDelete(productId, productImage) {
+        if (confirm('Are you sure you want to delete this product?')) {
+            window.location.href = 'product_delete.php?id=' + productId + '&image=' + encodeURIComponent(productImage);
+        }
+    }
+
+
+    function showAddQuantityModal(productId, existingQuantity) {
+    document.getElementById('product_id').value = productId;
+    document.getElementById('existing_quantity').value = existingQuantity;
+    document.getElementById('add_quantity').value = '';
+    const modal = new bootstrap.Modal(document.getElementById('addQuantityModal'));
+    modal.show();
+}
+
+function saveQuantity() {
+    const formData = new FormData(document.getElementById('addQuantityForm'));
+    fetch('update_quantity.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Quantity updated successfully!');
+            location.reload();
+        } else {
+            alert('Failed to update quantity: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating the quantity.');
+    });
+}
+    </script>
+    <!-- Logout confirmation -->
         <script>
     function confirmLogout() {
         if (confirm("Are you sure you want to logout?")) {

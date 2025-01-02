@@ -20,7 +20,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro Employee List</title>
+    <title>PlayFull Bistro add order</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -116,7 +116,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </span>
                 <h4 class="text-section">Order Management</h4>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
               <a href="add_order.php">
                   <i class="bi bi-plus-circle me-2"></i>
                   <p>Add Orders</p>
@@ -152,7 +152,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </span>
                 <h4 class="text-section"><i class="bi bi-gear me-2"></i>Accounts Settings</h4>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
                 <a data-bs-toggle="collapse" href="#base">
                   <i class="fas fa-layer-group"></i>
                   <p>Account List</p>
@@ -160,7 +160,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
                 <div class="collapse" id="base">
                   <ul class="nav nav-collapse">
-                    <li class="active">
+                    <li>
                       <a href="employee.php">
                         <span class="sub-item"><i class="bi bi-people me-2"></i>Empployee List</span>
                       </a>
@@ -356,10 +356,32 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </div>
 
         <div class="container">
-          <div class="page-inner">
-            Employee List
-          </div>
+    <div class="page-inner">
+        <h2 class="mt-5">Add Order</h2>
+        <div class="row">
+            <!-- Left column: Display all products -->
+            <div class="col-md-6">
+                <h3>Products</h3>
+                <ul class="list-group" id="productList">
+                    <?php foreach ($products as $product): ?>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <?php echo htmlspecialchars($product['product_name']); ?> - ₱<?php echo htmlspecialchars($product['price']); ?>
+                            <button class="btn btn-primary btn-sm" onclick="selectProduct(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['product_name']); ?>', <?php echo $product['price']; ?>)">Select</button>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <!-- Right column: Display selected products with quantity input -->
+            <div class="col-md-6">
+                <h3>Selected Products</h3>
+                <form id="orderForm" action="submit_order.php" method="POST">
+                    <div id="selectedProducts"></div>
+                    <button type="submit" class="btn btn-success mt-3">Submit Order</button>
+                </form>
+            </div>
         </div>
+    </div>
+</div>
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -392,6 +414,25 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     </div>
 
+    
+    <script>
+      // Select product and add to order form
+function selectProduct(id, name, price) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span>${name} - ₱${price}</span>
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+}
+    </script>
+    <!-- Logout confirmation dialog -->
         <script>
     function confirmLogout() {
         if (confirm("Are you sure you want to logout?")) {
@@ -424,7 +465,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     <!-- jQuery Vector Maps -->
     <script src="../../assets/js/plugin/jsvectormap/jsvectormap.min.js"></script>
-    <script src="../../assets/js/plugin/jsvectormap/world.js"></script>
+    <script src="assets/js/plugin/jsvectormap/world.js"></script>
 
     <!-- Sweet Alert -->
     <script src="../../assets/js/plugin/sweetalert/sweetalert.min.js"></script>
