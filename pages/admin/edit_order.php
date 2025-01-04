@@ -157,6 +157,12 @@ if ($order_number) {
                   <p>Order Records</p>
                 </a>
               </li>
+              <li class="nav-item">
+                <a href="served_order.php">
+                    <i class="fas fa-clipboard-check"></i>
+                    <p>Served Orders</p>
+                </a>
+            </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>
@@ -407,7 +413,7 @@ if ($order_number) {
                 <form id="orderForm" action="submit_edit.php" method="POST">
                     <div class="form-group d-flex justify-content-between align-items-center">
                         <div>
-                            <label for="orderNumber">Order Number</label>
+                            <label for="orderNumber">Order Number/Name</label>
                             <input type="text" id="orderNumber" name="order_number" class="form-control" value="<?php echo $order_number; ?>" readonly>
                         </div>
                         <div id="totalAmount" class="ml-3 mt-4">

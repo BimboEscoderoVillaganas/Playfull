@@ -173,6 +173,12 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                   <p>Order Records</p>
                 </a>
               </li>
+              <li class="nav-item">
+                <a href="served_order.php">
+                    <i class="fas fa-clipboard-check"></i>
+                    <p>Served Orders</p>
+                </a>
+            </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>
@@ -413,7 +419,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                                     <strong>Date Ordered:</strong> <?php echo htmlspecialchars(date('Y-m-d', strtotime($order['created_at']))); ?>
                                 </div>
                                 <div style="font-size: 14px;">
-                                    <strong>Order Number:</strong> <span style="font-size: 15px; color: blue;"><?php echo htmlspecialchars($order['order_number']); ?></span>
+                                    <strong>Order Number/Name:</strong> <span style="font-size: 15px; color: blue;"><?php echo htmlspecialchars($order['order_number']); ?></span>
                                 </div>
                             </div>
                         </div>

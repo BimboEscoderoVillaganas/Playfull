@@ -1,7 +1,7 @@
 <?php
-
 // Database connection
-include '../../src/db/db_connection.php';
+require_once '../../src/db/db_connection.php';
+
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
     // Redirect to login.php if no user is logged in
@@ -12,22 +12,48 @@ if (!isset($_SESSION['user_id'])) {
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
 
-// Get the current page name
-$current_page = basename($_SERVER['PHP_SELF']);
-
-
-// Fetch products from the database using PDO
-$query = "SELECT id, product_name, price FROM products";
+// Fetch orders and order details, excluding paid orders
+$query = "
+    SELECT o.order_number, o.total_amount, o.created_at, GROUP_CONCAT(od.product_name SEPARATOR '|') AS product_names, GROUP_CONCAT(od.quantity SEPARATOR '|') AS quantities
+    FROM orders o
+    JOIN order_details od ON o.id = od.order_id
+    LEFT JOIN paid p ON o.id = p.order_id
+    WHERE p.order_id IS NULL
+    GROUP BY o.order_number, o.total_amount, o.created_at
+    ORDER BY o.created_at ASC, o.order_number
+";
 $stmt = $pdo->query($query);
-$products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+$orders = [];
+while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    // Split concatenated product names and quantities into arrays
+    $productNames = explode('|', $row['product_names']);
+    $quantities = explode('|', $row['quantities']);
+
+    // Initialize order details
+    $details = [];
+    foreach ($productNames as $index => $productName) {
+        $details[] = [
+            'product_name' => $productName,
+            'quantity' => $quantities[$index]
+        ];
+    }
+
+    // Store grouped order data
+    $orders[] = [
+        'order_number' => $row['order_number'],
+        'created_at' => $row['created_at'],
+        'total_amount' => $row['total_amount'],
+        'details' => $details
+    ];
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro add order</title>
+    <title>PlayFull Bistro Order Records</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -65,6 +91,18 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="../../assets/css/kaiadmin.min.css" />
 
   </head>
+
+  <style>
+    .border {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+    }
+    .list-group-item {
+        border: none;
+        padding-left: 0;
+    }
+</style>
+
   <body>
     <div class="wrapper">
       <!-- Sidebar -->
@@ -123,7 +161,7 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </span>
                 <h4 class="text-section">Order Management</h4>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
               <a href="add_order.php">
                   <i class="bi bi-plus-circle me-2"></i>
                   <p>Add Orders</p>
@@ -135,7 +173,7 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                   <p>Order Records</p>
                 </a>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
                 <a href="served_order.php">
                     <i class="fas fa-clipboard-check"></i>
                     <p>Served Orders</p>
@@ -368,44 +406,50 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <!-- End Navbar -->
         </div>
 
-        <div class="container">
+        <div class="container mt-5">
     <div class="page-inner">
-        <h2 class="mt-5">Add Order</h2>
+        <h2 class="mb-4">Order Records</h2>
         <div class="row">
-            <!-- Left column: Display all products -->
-            <div class="col-md-6" style="max-height: 400px; overflow-y: auto;">
-                <h3>Products</h3>
-                <ul class="list-group" id="productList">
-                    <?php foreach ($products as $product): ?>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <?php echo htmlspecialchars($product['product_name']); ?> - ₱<?php echo htmlspecialchars($product['price']); ?>
-                            <button class="btn btn-primary btn-sm" onclick="selectProduct(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['product_name']); ?>', <?php echo $product['price']; ?>)">Select</button>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-
-            <!-- Right column: Display selected products with quantity input -->
-            <div class="col-md-6" style="position: sticky; top: 0;">
-                <h3>Selected Products</h3>
-                <form id="orderForm" action="submit_order.php" method="POST">
-                    <div class="form-group d-flex justify-content-between align-items-center">
-                        <div>
-                            <label for="orderNumber">Order Number/Name</label>
-                            <input type="text" id="orderNumber" name="order_number" class="form-control" required>
+            <?php foreach ($orders as $order): ?>
+                <div class="col-md-4 mb-4">
+                    <div class="d-flex flex-column border p-3 h-100">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <div style="font-size: 10px;">
+                                    <strong>Date Ordered:</strong> <?php echo htmlspecialchars(date('Y-m-d', strtotime($order['created_at']))); ?>
+                                </div>
+                                <div style="font-size: 14px;">
+                                    <strong>Order Number/Name:</strong> <span style="font-size: 15px; color: blue;"><?php echo htmlspecialchars($order['order_number']); ?></span>
+                                </div>
+                            </div>
                         </div>
-                        <div id="totalAmount" class="ml-3 mt-4">
-                            <span style="font-weight: bold; font-size: 12px;">Total Amount: </span>
-                            <span id="totalAmountValue" style="font-weight: bold; font-size: 12px; color: red;">₱0.00</span>
+                        <div class="mb-3 flex-grow-1">
+                            <strong>Orders:</strong>
+                            <ul class="list-group mt-2">
+                                <?php foreach ($order['details'] as $detail): ?>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span><?php echo htmlspecialchars($detail['product_name']); ?></span>
+                                        <span class="float-right">x<?php echo htmlspecialchars($detail['quantity']); ?></span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                        <div class="mt-auto text-right">
+                            <strong>Total Amount:</strong> <span style="color: red;">₱<?php echo htmlspecialchars($order['total_amount']); ?></span>
+                        </div>
+                        <div class="mt-3 d-flex justify-content-between">
+                            <a href="#" onclick="confirmDelete('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-danger btn-sm">Delete</a>
+                            <a href="edit_order.php?order_number=<?php echo htmlspecialchars($order['order_number']); ?>&created_at=<?php echo htmlspecialchars($order['created_at']); ?>" class="btn btn-secondary btn-sm">Edit</a>
+                            <a href="#" onclick="markPaid('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-success btn-sm">Paid</a>
                         </div>
                     </div>
-                    <div id="selectedProducts"></div>
-                    <button type="submit" class="btn btn-success mt-3">Submit Order</button>
-                </form>
-            </div>
+                </div>
+            <?php endforeach; ?>
         </div>
     </div>
 </div>
+
+
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -438,51 +482,31 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     </div>
 
-    
+
     <script>
-      // Select product and add to order form
-      
-function selectProduct(id, name, price) {
-    var selectedProductsDiv = document.getElementById('selectedProducts');
-    var productDiv = document.createElement('div');
-    productDiv.className = 'selected-product mb-3';
-    productDiv.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center">
-            <span>${name} - ₱${price}</span>
-            <input type="hidden" name="product_ids[]" value="${id}">
-            <input type="hidden" name="product_prices[]" value="${price}">
-            <input type="hidden" name="product_names[]" value="${name}">
-            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
-            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this)">Delete</button>
-        </div>
-    `;
-    selectedProductsDiv.appendChild(productDiv);
-    updateTotalAmount();
-}
-
-function deleteProduct(button) {
-    var productDiv = button.parentElement.parentElement;
-    productDiv.remove();
-    updateTotalAmount();
-}
-
-function updateTotalAmount() {
-    var totalAmount = 0;
-    var quantities = document.getElementsByName('quantities[]');
-    var prices = document.getElementsByName('product_prices[]');
-
-    for (var i = 0; i < quantities.length; i++) {
-        var quantity = parseFloat(quantities[i].value);
-        var price = parseFloat(prices[i].value);
-        if (!isNaN(quantity) && !isNaN(price)) {
-            totalAmount += quantity * price;
-        }
+      // Confirm delete
+function confirmDelete(orderNumber, createdAt) {
+    if (confirm("Are you sure you want to delete this order?")) {
+        window.location.href = "delete_order.php?order_number=" + encodeURIComponent(orderNumber) + "&created_at=" + encodeURIComponent(createdAt);
     }
-
-    document.getElementById('totalAmountValue').innerText = '₱' + totalAmount.toFixed(2);
 }
-    </script>
-    <!-- Logout confirmation dialog -->
+
+// Mark as paid
+function confirmDelete(orderNumber, createdAt) {
+    if (confirm("Are you sure you want to delete this order?")) {
+        window.location.href = "delete_order.php?order_number=" + orderNumber + "&created_at=" + createdAt;
+    }
+}
+// Mark as paid
+function markPaid(orderNumber, createdAt) {
+    if (confirm("Are you sure you want to mark this order as paid?")) {
+        window.location.href = "mark_paid.php?order_number=" + orderNumber + "&created_at=" + createdAt;
+    }
+}
+
+</script>
+
+
         <script>
     function confirmLogout() {
         if (confirm("Are you sure you want to logout?")) {
@@ -515,7 +539,7 @@ function updateTotalAmount() {
 
     <!-- jQuery Vector Maps -->
     <script src="../../assets/js/plugin/jsvectormap/jsvectormap.min.js"></script>
-    <script src="assets/js/plugin/jsvectormap/world.js"></script>
+    <script src="../../assets/js/plugin/jsvectormap/world.js"></script>
 
     <!-- Sweet Alert -->
     <script src="../../assets/js/plugin/sweetalert/sweetalert.min.js"></script>

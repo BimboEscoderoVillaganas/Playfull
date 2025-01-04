@@ -199,6 +199,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                   <p>Order Records</p>
                 </a>
               </li>
+              <li class="nav-item">
+                <a href="served_order.php">
+                    <i class="fas fa-clipboard-check"></i>
+                    <p>Served Orders</p>
+                </a>
+            </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>
