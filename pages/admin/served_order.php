@@ -408,7 +408,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 
         <div class="container mt-5">
     <div class="page-inner">
-        <h2 class="mb-4">Order Records</h2>
+        <h2 class="mb-4">Served Orders Record</h2>
         <div class="row">
             <?php foreach ($orders as $order): ?>
                 <div class="col-md-4 mb-4">
