@@ -15,13 +15,13 @@ $username = htmlspecialchars($_SESSION['username']);
 // Get the current page name
 $current_page = basename($_SERVER['PHP_SELF']);
 
-
-// Fetch products from the database using PDO
-$query = "SELECT id, product_name, price FROM products";
+// Fetch active products from the database using PDO
+$query = "SELECT id, product_name, price, image FROM products WHERE status = 'active'";
 $stmt = $pdo->query($query);
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -157,6 +157,12 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                   <a href="products_add.php">
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
+                  </a>
+              </li>
+              <li class="nav-item">
+                  <a href="products_archive.php"> 
+                      <i class="bi bi-archive me-2"></i>
+                      <p>Products Archive</p> 
                   </a>
               </li>
               <li class="nav-section">
@@ -378,8 +384,16 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <ul class="list-group" id="productList">
                     <?php foreach ($products as $product): ?>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
                             <?php echo htmlspecialchars($product['product_name']); ?> - ₱<?php echo htmlspecialchars($product['price']); ?>
-                            <button class="btn btn-primary btn-sm" onclick="selectProduct(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['product_name']); ?>', <?php echo $product['price']; ?>)">Select</button>
+                            <button class="btn btn-primary btn-sm" 
+        onclick="selectProduct(<?php echo $product['id']; ?>, 
+                               '<?php echo htmlspecialchars($product['product_name']); ?>', 
+                               <?php echo $product['price']; ?>, 
+                               '<?php echo htmlspecialchars($product['image']); ?>')">
+    Select
+</button>
+
                         </li>
                     <?php endforeach; ?>
                 </ul>
@@ -441,13 +455,13 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     <script>
       // Select product and add to order form
-      
-function selectProduct(id, name, price) {
+      function selectProduct(id, name, price, image) {
     var selectedProductsDiv = document.getElementById('selectedProducts');
     var productDiv = document.createElement('div');
     productDiv.className = 'selected-product mb-3';
     productDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
             <span>${name} - ₱${price}</span>
             <input type="hidden" name="product_ids[]" value="${id}">
             <input type="hidden" name="product_prices[]" value="${price}">
@@ -460,11 +474,6 @@ function selectProduct(id, name, price) {
     updateTotalAmount();
 }
 
-function deleteProduct(button) {
-    var productDiv = button.parentElement.parentElement;
-    productDiv.remove();
-    updateTotalAmount();
-}
 
 function updateTotalAmount() {
     var totalAmount = 0;
@@ -482,6 +491,21 @@ function updateTotalAmount() {
     document.getElementById('totalAmountValue').innerText = '₱' + totalAmount.toFixed(2);
 }
     </script>
+    <script>
+    // Display alert if there is a message in the URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const message = urlParams.get('message');
+    const type = urlParams.get('type');
+
+    if (message) {
+        // Show alert based on the type
+        alert(message);
+
+        // Optionally, you can clear the query parameters after displaying the alert
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+</script>
+
     <!-- Logout confirmation dialog -->
         <script>
     function confirmLogout() {

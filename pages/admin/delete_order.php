@@ -10,54 +10,79 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Get the order number and created_at from the query parameters
+// Get the order number from the query parameters
 $order_number = $_GET['order_number'] ?? null;
-$created_at = $_GET['created_at'] ?? null;
 
-if ($order_number && $created_at) {
+if ($order_number) {
     try {
         // Start a transaction
         $pdo->beginTransaction();
 
-        // Get the order ID based on the order_number and created_at
-        $stmt = $pdo->prepare("SELECT id FROM orders WHERE order_number = ? AND created_at = ?");
-        $stmt->execute([$order_number, $created_at]);
-        $order = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Fetch all orders with the given order_number
+        $stmt = $pdo->prepare("SELECT id, product_id, quantity FROM orders WHERE order_number = ?");
+        $stmt->execute([$order_number]);
+        $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        if ($order) {
-            $order_id = $order['id'];
-
-            // Fetch the order details before deletion
-            $stmt = $pdo->prepare("SELECT product_id, quantity FROM order_details WHERE order_id = ?");
-            $stmt->execute([$order_id]);
-            $orderDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // Restore quantities in the products table
-            $updateStmt = $pdo->prepare("UPDATE products SET quantity = quantity + ? WHERE id = ?");
-            foreach ($orderDetails as $detail) {
-                $updateStmt->execute([$detail['quantity'], $detail['product_id']]);
-            }
-
-            // Delete from order_details table using order_id
-            $stmt = $pdo->prepare("DELETE FROM order_details WHERE order_id = ?");
-            $stmt->execute([$order_id]);
-
-            // Delete from orders table
-            $stmt = $pdo->prepare("DELETE FROM orders WHERE id = ?");
-            $stmt->execute([$order_id]);
+        // If no orders found with the provided order_number
+        if (!$orders) {
+            header('Location: order_records.php?error=No orders found with this number');
+            exit();
         }
 
-        // Commit the transaction
-        $pdo->commit();
+        // Check for served or paid status for the orders
+        $deleteOrders = [];
 
-        // Redirect with success message
-        header('Location: order_records.php?success=Order deleted successfully');
-        exit();
+        foreach ($orders as $order) {
+            $order_id = $order['id'];
+            $product_id = $order['product_id'];
+            $quantity = $order['quantity'];
+
+            // Check if the order has been served or paid
+            $stmt = $pdo->prepare("SELECT 1 FROM served WHERE order_id = ? LIMIT 1");
+            $stmt->execute([$order_id]);
+            $served = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $stmt = $pdo->prepare("SELECT 1 FROM paid WHERE order_id = ? LIMIT 1");
+            $stmt->execute([$order_id]);
+            $paid = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // If the order is neither served nor paid, mark it for deletion
+            if (!$served && !$paid) {
+                $deleteOrders[] = $order;
+            }
+        }
+
+        // If there are any orders to delete, proceed with deletion
+        if ($deleteOrders) {
+            $updateStmt = $pdo->prepare("UPDATE products SET quantity = quantity + ? WHERE id = ?");
+
+            // Restore quantities in the products table and delete orders
+            foreach ($deleteOrders as $order) {
+                // Restore product quantity
+                $updateStmt->execute([$order['quantity'], $order['product_id']]);
+
+                // Delete the order from the orders table
+                $stmt = $pdo->prepare("DELETE FROM orders WHERE id = ?");
+                $stmt->execute([$order['id']]);
+            }
+
+            // Commit the transaction
+            $pdo->commit();
+
+            // Redirect with success message
+            header('Location: order_records.php?success=Orders deleted successfully');
+            exit();
+        } else {
+            // If no deletable orders found
+            header('Location: order_records.php?error=No deletable orders found (some are served/paid)');
+            exit();
+        }
+
     } catch (Exception $e) {
         // Rollback the transaction in case of an error
         $pdo->rollBack();
         error_log($e->getMessage());
-        header('Location: order_records.php?error=Unable to delete the order');
+        header('Location: order_records.php?error=Unable to delete orders');
         exit();
     }
 } else {

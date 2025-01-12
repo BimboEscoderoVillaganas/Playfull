@@ -22,32 +22,9 @@ try {
     $product = $stmt->fetch();
 
     if ($product) {
-        // Move the product to the archive table
-        $archiveStmt = $pdo->prepare(
-            "INSERT INTO products_archive (id, image, product_name, description, quantity, price) 
-             VALUES (?, ?, ?, ?, ?, ?)"
-        );
-        $archiveStmt->execute([
-            $product['id'],
-            $product['image'],
-            $product['product_name'],
-            $product['description'],
-            $product['quantity'],
-            $product['price']
-        ]);
-
-        // Update related tables to maintain referential integrity
-        $updateOrderDetailsStmt = $pdo->prepare(
-            "UPDATE order_details 
-             SET product_name = ?, product_id = NULL 
-             WHERE product_id = ?"
-        );
-        $updateOrderDetailsStmt->execute([$product['product_name'], $product_id]);
-        
-
-        // Delete the product from the original table
-        $deleteStmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
-        $deleteStmt->execute([$product_id]);
+        // Update the product's status to 'inactive' (mark as deleted)
+        $updateStatusStmt = $pdo->prepare("UPDATE products SET status = 'inactive' WHERE id = ?");
+        $updateStatusStmt->execute([$product_id]);
     }
 
     // Commit transaction

@@ -16,11 +16,12 @@ $stmt->execute([$user_id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 $username = $user['username'] ?? '';
 
-// Fetch all products from the database
-$stmt = $pdo->prepare("SELECT * FROM products");
+// Fetch only active products from the database
+$stmt = $pdo->prepare("SELECT * FROM products WHERE status = 'active'");
 $stmt->execute();
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
 
 
 
@@ -164,6 +165,12 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                   <a href="products_add.php">
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
+                  </a>
+              </li>
+              <li class="nav-item">
+                  <a href="products_archive.php"> 
+                      <i class="bi bi-archive me-2"></i>
+                      <p>Products Archive</p> 
                   </a>
               </li>
               <li class="nav-section">

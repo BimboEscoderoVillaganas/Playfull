@@ -1,5 +1,5 @@
 <?php
-// Database connection
+// Include the database connection file
 require_once '../../src/db/db_connection.php';
 
 // Check if the user is logged in
@@ -12,55 +12,44 @@ if (!isset($_SESSION['user_id'])) {
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
 
-// Fetch orders and order details, excluding paid and served orders, grouped by order_number
-$query = "
-    SELECT o.order_number, o.created_at, o.product_id, o.quantity, p.product_name, p.price
-    FROM orders o
-    JOIN products p ON o.product_id = p.id
-    LEFT JOIN paid pa ON o.id = pa.order_id
-    LEFT JOIN served s ON o.id = s.order_id
-    WHERE pa.order_id IS NULL AND s.order_id IS NULL
-    GROUP BY o.order_number, o.created_at, o.product_id
-    ORDER BY o.created_at ASC, o.order_number
-";
-$stmt = $pdo->query($query);
+// Get the current page name
+$current_page = basename($_SERVER['PHP_SELF']);
 
-$orders = [];
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    // Calculate the total amount for the order
-    $totalAmount = $row['quantity'] * $row['price'];
+// Handle the restore action
+if (isset($_GET['restore_id'])) {
+    $product_id = $_GET['restore_id'];
 
-    // Group orders by order_number
-    if (!isset($orders[$row['order_number']])) {
-        $orders[$row['order_number']] = [
-            'order_number' => $row['order_number'],
-            'created_at' => $row['created_at'],
-            'total_amount' => 0, // Start with 0 and calculate the total later
-            'details' => []
-        ];
+    try {
+        // Begin transaction
+        $pdo->beginTransaction();
+
+        // Update the product's status to 'active'
+        $updateStatusStmt = $pdo->prepare("UPDATE products SET status = 'active' WHERE id = ?");
+        $updateStatusStmt->execute([$product_id]);
+
+        // Commit transaction
+        $pdo->commit();
+
+        // Redirect back to the products archive page after restoration
+        header('Location: ' . $current_page);
+        exit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        die("Error: " . $e->getMessage());
     }
-
-    // Store the product details in the order
-    $orders[$row['order_number']]['details'][] = [
-        'product_name' => $row['product_name'],
-        'quantity' => $row['quantity'],
-        'price' => number_format($row['price'], 2)
-    ];
-
-    // Update the total amount for this order
-    $orders[$row['order_number']]['total_amount'] += $totalAmount;
 }
 
-// Re-index the orders array to prevent issues with array keys
-$orders = array_values($orders);
-
+// Fetch all inactive products from the database
+$stmt = $pdo->prepare("SELECT * FROM products WHERE status = 'inactive'");
+$stmt->execute();
+$inactive_products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro Order Records</title>
+    <title>PlayFull Bistro Product Archive</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -98,18 +87,6 @@ $orders = array_values($orders);
     <link rel="stylesheet" href="../../assets/css/kaiadmin.min.css" />
 
   </head>
-
-  <style>
-    .border {
-        border: 1px solid #ccc;
-        border-radius: 8px;
-    }
-    .list-group-item {
-        border: none;
-        padding-left: 0;
-    }
-</style>
-
   <body>
     <div class="wrapper">
       <!-- Sidebar -->
@@ -150,7 +127,7 @@ $orders = array_values($orders);
                 </span>
                 <h4 class="text-section">Key Performans Indicator</h4>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
               <a href="dashboard.php">
                   <i class="fas fa-home"></i>
                   <p>Dashboard</p>
@@ -174,12 +151,13 @@ $orders = array_values($orders);
                   <p>Add Orders</p>
                 </a>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
               <a href="order_records.php">
                   <i class="bi bi-list-ul me-2"></i>
                   <p>Order Records</p>
                 </a>
               </li>
+              
               <li class="nav-item">
                 <a href="served_order.php">
                     <i class="fas fa-clipboard-check"></i>
@@ -402,6 +380,7 @@ $orders = array_values($orders);
                           </div>
                         </div>
                       </li>
+                      
                       <li>
                         <div class="dropdown-divider"></div>
                         <div style="display: flex; justify-content: flex-end;">
@@ -419,51 +398,46 @@ $orders = array_values($orders);
           <!-- End Navbar -->
         </div>
 
-        <div class="container mt-5">
+        <div class="container">
     <div class="page-inner">
-        <h2 class="mb-4">Order Records</h2>
-        <div class="row">
-            <?php foreach ($orders as $order): ?>
-                <div class="col-md-4 mb-4">
-                    <div class="d-flex flex-column border p-3 h-100">
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between">
-                                <div style="font-size: 10px;">
-                                    <strong>Date Ordered:</strong> <?php echo htmlspecialchars(date('Y-m-d', strtotime($order['created_at']))); ?>
-                                </div>
-                                <div style="font-size: 14px;">
-                                    <strong>Order Number/Name:</strong> <span style="font-size: 15px; color: blue;"><?php echo htmlspecialchars($order['order_number']); ?></span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mb-3 flex-grow-1">
-                            <strong>Orders:</strong>
-                            <ul class="list-group mt-2">
-                                <?php foreach ($order['details'] as $detail): ?>
-                                    <li class="list-group-item d-flex justify-content-between">
-                                        <span><?php echo htmlspecialchars($detail['product_name']); ?></span>
-                                        <span class="float-right">x<?php echo htmlspecialchars($detail['quantity']); ?> @ ₱<?php echo htmlspecialchars($detail['price']); ?></span>
-                                    </li>
-                                <?php endforeach; ?>
-                            </ul>
-                        </div>
-                        <div class="mt-auto text-right">
-                            <strong>Total Amount:</strong> <span style="color: red;">₱<?php echo number_format($order['total_amount'], 2); ?></span>
-                        </div>
-                        <div class="mt-3 d-flex justify-content-between">
-                            <a href="#" onclick="confirmDelete('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-danger btn-sm">Delete</a>
-                            <a href="edit_order.php?order_number=<?php echo htmlspecialchars($order['order_number']); ?>&created_at=<?php echo htmlspecialchars($order['created_at']); ?>" class="btn btn-secondary btn-sm">Edit</a>
-                            <a href="#" onclick="markPaid('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-success btn-sm">Paid</a>
-                            <a href="#" onclick="markServed('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-primary btn-sm">Served</a>
-                        </div>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        </div>
+        <h3>Products Archive</h3>
+
+        <!-- Check if there are inactive products -->
+        <?php if (count($inactive_products) > 0): ?>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Product Name</th>
+                        <th>Description</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Image</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($inactive_products as $product): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($product['id']); ?></td>
+                            <td><?php echo htmlspecialchars($product['product_name']); ?></td>
+                            <td><?php echo htmlspecialchars($product['description']); ?></td>
+                            <td><?php echo htmlspecialchars($product['quantity']); ?></td>
+                            <td><?php echo htmlspecialchars($product['price']); ?></td>
+                            <td><img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>" width="60"></td>
+                            <td>
+                                <!-- Restore button to change product status to active -->
+                                <a href="?restore_id=<?php echo $product['id']; ?>" class="btn btn-success btn-sm">Restore</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <p>No archived products found.</p>
+        <?php endif; ?>
     </div>
 </div>
-
-
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -495,31 +469,6 @@ $orders = array_values($orders);
       </div>
 
     </div>
-
-
-    <script>
-      // Confirm delete
-function confirmDelete(orderNumber, createdAt) {
-    if (confirm("Are you sure you want to delete this order?")) {
-        window.location.href = "delete_order.php?order_number=" + encodeURIComponent(orderNumber) + "&created_at=" + encodeURIComponent(createdAt);
-    }
-}
-
-// Mark as paid
-function markPaid(orderNumber, createdAt) {
-    if (confirm("Are you sure you want to mark this order as paid?")) {
-        window.location.href = "mark_paid.php?order_number=" + orderNumber + "&created_at=" + createdAt;
-    }
-}
-
-// Mark as served
-function markServed(orderNumber, createdAt) {
-    if (confirm("Are you sure you want to mark this order as served?")) {
-        window.location.href = "mark_served.php?order_number=" + orderNumber + "&created_at=" + createdAt;
-    }
-}
-</script>
-
 
         <script>
     function confirmLogout() {

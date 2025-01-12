@@ -152,6 +152,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
                       <p>Add Products</p>
                   </a>
               </li>
+              <li class="nav-item">
+                  <a href="products_archive.php"> 
+                      <i class="bi bi-archive me-2"></i>
+                      <p>Products Archive</p> 
+                  </a>
+              </li>
               <li class="nav-section">
                 <span class="sidebar-mini-icon">
                   <i class="fa fa-ellipsis-h"></i>

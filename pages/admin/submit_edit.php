@@ -1,109 +1,78 @@
 <?php
-require_once '../../src/db/db_connection.php'; // Include your database connection file
-session_start();
+include '../../src/db/db_connection.php';
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $orderNumber = $_POST['order_number']; // Get the order number from the form
-    $productIds = $_POST['product_ids'];
-    $quantities = $_POST['quantities'];
-    $productPrices = $_POST['product_prices'];
-    $productNames = $_POST['product_names'];
-    $totalAmount = 0;
+// Assume $_POST['product_ids'], $_POST['quantities'], and $_POST['product_prices'] are submitted
+$orderNumber = $_POST['order_number'];
+$productIds = $_POST['product_ids'];
+$quantities = $_POST['quantities'];
+$productPrices = $_POST['product_prices'];
+$deletedProducts = explode(',', $_POST['deleted_products']);
 
-    foreach ($quantities as $index => $quantity) {
-        $totalAmount += $quantity * $productPrices[$index];
-    }
+// Validate product IDs
+try {
+    if (!empty($productIds)) {
+        $placeholders = rtrim(str_repeat('?,', count($productIds)), ',');
+        $stmt = $pdo->prepare("SELECT id FROM products WHERE id IN ($placeholders)");
+        $stmt->execute($productIds);
+        $validProductIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-    try {
-        // Begin transaction
-        $pdo->beginTransaction();
-
-        // Check if there are existing records for the same order_number
-        $stmt = $pdo->prepare("SELECT id, created_at FROM orders WHERE order_number = ?");
-        $stmt->execute([$orderNumber]);
-        $existingOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if ($existingOrders) {
-            // Fetch old order details
-            $detailsStmt = $pdo->prepare("SELECT product_id, quantity FROM order_details WHERE order_id = ?");
-            $oldOrderId = $existingOrders[0]['id']; // Assuming one active order per order_number
-            $detailsStmt->execute([$oldOrderId]);
-            $oldOrderDetails = $detailsStmt->fetchAll(PDO::FETCH_ASSOC);
-        
-            // Map old quantities by product ID
-            $oldQuantities = [];
-            foreach ($oldOrderDetails as $detail) {
-                $oldQuantities[$detail['product_id']] = $detail['quantity'];
-            }
-        
-            // Update product quantities based on the difference
-            foreach ($productIds as $index => $productId) {
-                $newQuantity = $quantities[$index];
-                $oldQuantity = isset($oldQuantities[$productId]) ? $oldQuantities[$productId] : 0;
-                $quantityDifference = $newQuantity - $oldQuantity;
-        
-                // Update product quantity in the `products` table
-                $updateStmt = $pdo->prepare("UPDATE products SET quantity = quantity - ? WHERE id = ?");
-                $updateStmt->execute([$quantityDifference, $productId]);
-            }
-        
-            // Delete old order details
-            $deleteDetailsStmt = $pdo->prepare("DELETE FROM order_details WHERE order_id = ?");
-            $deleteDetailsStmt->execute([$oldOrderId]);
-        
-            // Insert new order details
-            $stmt = $pdo->prepare("INSERT INTO order_details (order_id, order_number, product_id, product_name, quantity, price) VALUES (?, ?, ?, ?, ?, ?)");
-            foreach ($productIds as $index => $productId) {
-                $quantity = $quantities[$index];
-                $price = $productPrices[$index];
-                $productName = $productNames[$index];
-                $stmt->execute([$oldOrderId, $orderNumber, $productId, $productName, $quantity, $price]);
-            }
-        
-            // Update total amount in `orders` table
-            $updateOrderStmt = $pdo->prepare("UPDATE orders SET total_amount = ? WHERE id = ?");
-            $updateOrderStmt->execute([$totalAmount, $oldOrderId]);
-        } else {
-            // Handle new orders (no changes needed here)
-            $stmt = $pdo->prepare("INSERT INTO orders (order_number, total_amount) VALUES (?, ?)");
-            $stmt->execute([$orderNumber, $totalAmount]);
-            $orderId = $pdo->lastInsertId();
-        
-            $stmt = $pdo->prepare("INSERT INTO order_details (order_id, order_number, product_id, product_name, quantity, price) VALUES (?, ?, ?, ?, ?, ?)");
-            foreach ($productIds as $index => $productId) {
-                $quantity = $quantities[$index];
-                $price = $productPrices[$index];
-                $productName = $productNames[$index];
-                $stmt->execute([$orderId, $orderNumber, $productId, $productName, $quantity, $price]);
-        
-                // Deduct the quantity from the products table
-                $updateStmt = $pdo->prepare("UPDATE products SET quantity = quantity - ? WHERE id = ?");
-                $updateStmt->execute([$quantity, $productId]);
+        // Filter valid product IDs
+        foreach ($productIds as $index => $productId) {
+            if (!in_array($productId, $validProductIds)) {
+                unset($productIds[$index], $quantities[$index], $productPrices[$index]);
             }
         }
-        
 
-        // Commit transaction
-        $pdo->commit();
-
-        // Set success message
-        $_SESSION['message'] = "Order successfully updated!";
-        $_SESSION['message_type'] = "success";
-
-        // Redirect after success
-        header("Location: edit_order.php");
-        exit();
-    } catch (PDOException $e) {
-        // Rollback transaction
-        $pdo->rollBack();
-
-        // Set error message
-        $_SESSION['message'] = "Error: " . $e->getMessage();
-        $_SESSION['message_type'] = "danger";
-
-        // Redirect after error
-        header("Location: edit_order.php");
-        exit();
+        // Reindex arrays to maintain proper alignment
+        $productIds = array_values($productIds);
+        $quantities = array_values($quantities);
+        $productPrices = array_values($productPrices);
     }
+} catch (Exception $e) {
+    die("Error validating product IDs: " . $e->getMessage());
 }
+
+// Start a transaction
+$pdo->beginTransaction();
+
+try {
+    // Delete marked products from the order
+    if (!empty($deletedProducts)) {
+        $placeholders = rtrim(str_repeat('?,', count($deletedProducts)), ',');
+        $stmt = $pdo->prepare("DELETE FROM orders WHERE order_number = ? AND product_id IN ($placeholders)");
+        $stmt->execute(array_merge([$orderNumber], $deletedProducts));
+    }
+
+    // Insert or update products in the order
+    for ($i = 0; $i < count($productIds); $i++) {
+        $productId = $productIds[$i];
+        $quantity = $quantities[$i];
+        $price = $productPrices[$i];
+
+        // Check if the order already contains the product
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE order_number = ? AND product_id = ?");
+        $stmt->execute([$orderNumber, $productId]);
+        $exists = $stmt->fetchColumn();
+
+        if ($exists) {
+            // Update existing record
+            $stmt = $pdo->prepare("UPDATE orders SET quantity = ?, price = ? WHERE order_number = ? AND product_id = ?");
+            $stmt->execute([$quantity, $price, $orderNumber, $productId]);
+        } else {
+            // Insert new record
+            $stmt = $pdo->prepare("INSERT INTO orders (order_number, product_id, quantity, price) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$orderNumber, $productId, $quantity, $price]);
+        }
+    }
+
+    // Commit transaction
+    $pdo->commit();
+    header('Location: order_records.php?status=success');
+} catch (Exception $e) {
+    // Rollback on error
+    $pdo->rollBack();
+    error_log("Error during order update: " . $e->getMessage());
+    die("Error processing the order. Please check the logs for details.");
+}
+
 ?>

@@ -1,7 +1,6 @@
 <?php
 // Database connection
 include '../../src/db/db_connection.php';
-
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../../login.php');
@@ -12,8 +11,8 @@ if (!isset($_SESSION['user_id'])) {
 $username = htmlspecialchars($_SESSION['username']);
 $order_number = isset($_GET['order_number']) ? htmlspecialchars($_GET['order_number']) : null;
 
-// Fetch products from the database
-$query = "SELECT id, product_name, price FROM products";
+// Fetch active products from the database
+$query = "SELECT id, product_name, price, quantity, image FROM products WHERE status = 'active'";
 $stmt = $pdo->query($query);
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -30,7 +29,10 @@ if ($order_number) {
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
     // Fetch order details
-    $query = "SELECT * FROM order_details WHERE order_number = ?";
+    $query = "SELECT o.id, p.product_name, o.quantity, o.price, p.image 
+              FROM orders o 
+              JOIN products p ON o.product_id = p.id 
+              WHERE o.order_number = ?";
     $stmt = $pdo->prepare($query);
     $stmt->execute([$order_number]);
     $orderDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -41,6 +43,7 @@ if ($order_number) {
     }
 }
 ?>
+
 
 
 
@@ -179,6 +182,12 @@ if ($order_number) {
                   <a href="products_add.php">
                       <i class="bi bi-plus-square me-2"></i>
                       <p>Add Products</p>
+                  </a>
+              </li>
+              <li class="nav-item">
+                  <a href="products_archive.php"> 
+                      <i class="bi bi-archive me-2"></i>
+                      <p>Products Archive</p> 
                   </a>
               </li>
               <li class="nav-section">
@@ -400,8 +409,10 @@ if ($order_number) {
                 <ul class="list-group" id="productList">
                     <?php foreach ($products as $product): ?>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
                             <?php echo htmlspecialchars($product['product_name']); ?> - ₱<?php echo htmlspecialchars($product['price']); ?>
-                            <button class="btn btn-primary btn-sm" onclick="selectProduct(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['product_name']); ?>', <?php echo $product['price']; ?>)">Select</button>
+                            <button class="btn btn-primary btn-sm" onclick="selectProduct(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['product_name']); ?>', <?php echo $product['price']; ?>, '<?php echo htmlspecialchars($product['image']); ?>')">Select</button>
+
                         </li>
                     <?php endforeach; ?>
                 </ul>
@@ -413,7 +424,7 @@ if ($order_number) {
                 <form id="orderForm" action="submit_edit.php" method="POST">
                     <div class="form-group d-flex justify-content-between align-items-center">
                         <div>
-                            <label for="orderNumber">Order Number/Name</label>
+                            <label for="orderNumber">Order Number</label>
                             <input type="text" id="orderNumber" name="order_number" class="form-control" value="<?php echo $order_number; ?>" readonly>
                         </div>
                         <div id="totalAmount" class="ml-3 mt-4">
@@ -422,16 +433,19 @@ if ($order_number) {
                         </div>
                     </div>
 
+                    <!-- Hidden field to store deleted product IDs -->
+                    <input type="hidden" id="deletedProducts" name="deleted_products" value="">
+
                     <div id="selectedProducts">
                         <?php foreach ($orderDetails as $detail): ?>
                             <div class="selected-product mb-3">
                                 <div class="d-flex justify-content-between align-items-center">
+                                    <img src="<?php echo htmlspecialchars($detail['image']); ?>" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
                                     <span><?php echo htmlspecialchars($detail['product_name']); ?> - ₱<?php echo htmlspecialchars($detail['price']); ?></span>
-                                    <input type="hidden" name="product_ids[]" value="<?php echo $detail['product_id']; ?>">
+                                    <input type="hidden" name="product_ids[]" value="<?php echo $detail['id']; ?>">
                                     <input type="hidden" name="product_prices[]" value="<?php echo $detail['price']; ?>">
-                                    <input type="hidden" name="product_names[]" value="<?php echo htmlspecialchars($detail['product_name']); ?>">
                                     <input type="number" name="quantities[]" class="form-control ml-2" value="<?php echo $detail['quantity']; ?>" required oninput="updateTotalAmount()">
-                                    <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this)">Delete</button>
+                                    <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, <?php echo $detail['id']; ?>)">Delete</button>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -442,6 +456,9 @@ if ($order_number) {
         </div>
     </div>
 </div>
+
+
+
 
 
 
@@ -478,45 +495,84 @@ if ($order_number) {
     </div>
 
     
+    
     <script>
-function selectProduct(id, name, price) {
+    function selectProduct(id, name, price, image) {
     var selectedProductsDiv = document.getElementById('selectedProducts');
     var productDiv = document.createElement('div');
     productDiv.className = 'selected-product mb-3';
     productDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
             <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
             <input type="hidden" name="product_ids[]" value="${id}">
             <input type="hidden" name="product_prices[]" value="${price}">
-            <input type="hidden" name="product_names[]" value="${name}">
             <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
-            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this)">Delete</button>
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
         </div>
     `;
     selectedProductsDiv.appendChild(productDiv);
     updateTotalAmount();
 }
 
-function deleteProduct(button) {
-    button.parentElement.parentElement.remove();
-    updateTotalAmount();
-}
 
-function updateTotalAmount() {
-    var totalAmount = 0;
-    var quantities = document.getElementsByName('quantities[]');
-    var prices = document.getElementsByName('product_prices[]');
 
-    for (var i = 0; i < quantities.length; i++) {
-        var quantity = parseFloat(quantities[i].value);
-        var price = parseFloat(prices[i].value);
-        if (!isNaN(quantity) && !isNaN(price)) {
-            totalAmount += quantity * price;
+
+    function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        if (productId > 0) { // Existing product in the database
+            // Perform an AJAX request to delete the product from the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var productDiv = button.parentElement.parentElement;
+                    productDiv.remove();
+                    updateTotalAmount(); // Update total amount after deletion
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product.');
+            });
+        } else {
+            // If the product is not saved (ID = 0), just remove it from the DOM
+            var productDiv = button.parentElement.parentElement;
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
         }
     }
-    document.getElementById('totalAmountValue').innerText = '₱' + totalAmount.toFixed(2);
 }
+
+
+
+    function updateTotalAmount() {
+        var totalAmount = 0;
+        var quantities = document.getElementsByName('quantities[]');
+        var prices = document.getElementsByName('product_prices[]');
+
+        for (var i = 0; i < quantities.length; i++) {
+            var quantity = parseFloat(quantities[i].value);
+            var price = parseFloat(prices[i].value);
+            if (!isNaN(quantity) && !isNaN(price)) {
+                totalAmount += quantity * price;
+            }
+        }
+        document.getElementById('totalAmountValue').innerText = '₱' + totalAmount.toFixed(2);
+    }
 </script>
+
     <!-- Logout confirmation dialog -->
         <script>
     function confirmLogout() {
