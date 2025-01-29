@@ -470,7 +470,7 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <input type="hidden" name="product_prices[]" value="${price}">
             <input type="hidden" name="product_names[]" value="${name}">
             <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
-            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this)">Delete</button>
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="removeProduct(this)">Remove</button>
         </div>
     `;
     selectedProductsDiv.appendChild(productDiv);
@@ -478,6 +478,13 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 
+function removeProduct(button, productId) {
+    if (confirm('Are you sure you want to remove this product from the selection?')) {
+        const productDiv = button.closest('.selected-product');
+        productDiv.remove();
+        updateTotalAmount();
+    }
+}
 function updateTotalAmount() {
     var totalAmount = 0;
     var quantities = document.getElementsByName('quantities[]');
