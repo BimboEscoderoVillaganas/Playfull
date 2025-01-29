@@ -9,8 +9,16 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Check if the logged-in user is an admin
+if ($_SESSION['user_type'] !== 'admin') {
+  // Redirect unauthorized users to the homepage or an error page
+  header('Location: 403.php'); // Use 403 Forbidden error page
+  exit();
+}
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
+// Get the logged-in user's email
+$useremail = htmlspecialchars($_SESSION['email']);
 
 // Get the current page name
 $current_page = basename($_SERVER['PHP_SELF']);
@@ -127,7 +135,7 @@ $inactive_products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </span>
                 <h4 class="text-section">Key Performans Indicator</h4>
               </li>
-              <li class="nav-item active">
+              <li class="nav-item">
               <a href="dashboard.php">
                   <i class="fas fa-home"></i>
                   <p>Dashboard</p>
@@ -182,7 +190,7 @@ $inactive_products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                       <p>Add Products</p>
                   </a>
               </li>
-              <li class="nav-item">
+              <li class="nav-item active">
                   <a href="products_archive.php"> 
                       <i class="bi bi-archive me-2"></i>
                       <p>Products Archive</p> 
@@ -371,7 +379,7 @@ $inactive_products = $stmt->fetchAll(PDO::FETCH_ASSOC);
                           </div>
                           <div class="u-text">
                             <h4><?php echo $username; ?></h4>
-                            <p class="text-muted">hello@example.com</p>
+                            <p class="text-muted"><?php echo $useremail; ?></p>
                             <a
                               href="profile.php"
                               class="btn btn-xs btn-secondary btn-sm"

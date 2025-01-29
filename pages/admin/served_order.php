@@ -9,8 +9,16 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Check if the logged-in user is an admin
+if ($_SESSION['user_type'] !== 'admin') {
+  // Redirect unauthorized users to the homepage or an error page
+  header('Location: 403.php'); // Use 403 Forbidden error page
+  exit();
+}
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
+// Get the logged-in user's email
+$useremail = htmlspecialchars($_SESSION['email']);
 
 // Fetch served orders, grouping them by order_number
 // Fetch served orders with proper grouping by order_number and correct total_amount calculation
@@ -391,7 +399,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                           </div>
                           <div class="u-text">
                             <h4><?php echo $username; ?></h4>
-                            <p class="text-muted">hello@example.com</p>
+                            <p class="text-muted"><?php echo $useremail; ?></p>
                             <a
                               href="profile.php"
                               class="btn btn-xs btn-secondary btn-sm"

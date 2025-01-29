@@ -1,6 +1,6 @@
 <?php
-// Start the session
-session_start();
+// Include database connection
+include '../../src/db/db_connection.php';
 
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -9,18 +9,77 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Check if the logged-in user is an admin
+if ($_SESSION['user_type'] !== 'admin') {
+  // Redirect unauthorized users to the homepage or an error page
+  header('Location: 403.php'); // Use 403 Forbidden error page
+  exit();
+}
+
+
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
+// Get the logged-in user's email
+$useremail = htmlspecialchars($_SESSION['email']);
 
-// Get the current page name
-$current_page = basename($_SERVER['PHP_SELF']);
+// Get today's date
+$today = date('Y-m-d');
+
+try {
+    // Fetch product sales and calculate the average
+    $query = "SELECT p.id, p.product_name, SUM(o.quantity) AS total_quantity, 
+                     AVG(o.quantity) AS average_quantity
+              FROM paid pa
+              JOIN orders o ON pa.order_id = o.id
+              JOIN products p ON o.product_id = p.id
+              WHERE DATE(pa.paid_at) = ?
+              GROUP BY p.id";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([$today]);
+    $salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Filter products that reached or exceeded the average
+    $productsExceedingAverage = [];
+    foreach ($salesData as $data) {
+        if ($data['total_quantity'] >= $data['average_quantity']) {
+            $productsExceedingAverage[] = [
+                'name' => $data['product_name'],
+                'quantity' => $data['total_quantity']
+            ];
+        }
+    }
+
+    // Pass data to frontend
+    $productCount = count($productsExceedingAverage);
+} catch (PDOException $e) {
+    die("Database query failed: " . $e->getMessage());
+}
+// Get logged-in user ID
+$user_id = $_SESSION['user_id'];
+
+try {
+    // Fetch user details
+    $query = "SELECT id, username, email, phone_number, user_type, created_at FROM users WHERE id = ?";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([$user_id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$user) {
+        die("User not found.");
+    }
+} catch (PDOException $e) {
+    die("Database query failed: " . $e->getMessage());
+}
 ?>
+
+
+
 
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro Profile</title>
+    <title>PlayFull Bistro Admin Dashboard</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -31,6 +90,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
       type="image/x-icon"
     />
 
+    <!-- Optional Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Fonts and icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css" rel="stylesheet">
     <script src="../../assets/js/plugin/webfont/webfont.min.js"></script>
@@ -128,6 +189,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                   <p>Order Records</p>
                 </a>
               </li>
+              
               <li class="nav-item">
                 <a href="served_order.php">
                     <i class="fas fa-clipboard-check"></i>
@@ -240,73 +302,42 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     aria-expanded="false"
                   >
                     <i class="fa fa-bell"></i>
-                    <span class="notification">4</span>
+                    <span class="notification"><?php echo $productCount; ?></span>
                   </a>
                   <ul
                     class="dropdown-menu notif-box animated fadeIn"
                     aria-labelledby="notifDropdown"
                   >
-                    <li>
-                      <div class="dropdown-title">
-                        You have 4 new notification
-                      </div>
-                    </li>
-                    <li>
-                      <div class="notif-scroll scrollbar-outer">
-                        <div class="notif-center">
-                          <a href="#">
-                            <div class="notif-icon notif-primary">
-                              <i class="fa fa-user-plus"></i>
-                            </div>
-                            <div class="notif-content">
-                              <span class="block"> New user registered </span>
-                              <span class="time">5 minutes ago</span>
-                            </div>
-                          </a>
-                          <a href="#">
-                            <div class="notif-icon notif-success">
-                              <i class="fa fa-comment"></i>
-                            </div>
-                            <div class="notif-content">
-                              <span class="block">
-                                Rahmad commented on Admin
-                              </span>
-                              <span class="time">12 minutes ago</span>
-                            </div>
-                          </a>
-                          <a href="#">
-                            <div class="notif-img">
-                              <img
-                                src="../../assets/img/profile2.jpg"
-                                alt="Img Profile"
-                              />
-                            </div>
-                            <div class="notif-content">
-                              <span class="block">
-                                Reza send messages to you
-                              </span>
-                              <span class="time">12 minutes ago</span>
-                            </div>
-                          </a>
-                          <a href="#">
-                            <div class="notif-icon notif-danger">
-                              <i class="fa fa-heart"></i>
-                            </div>
-                            <div class="notif-content">
-                              <span class="block"> Farrah liked Admin </span>
-                              <span class="time">17 minutes ago</span>
-                            </div>
-                          </a>
-                        </div>
-                      </div>
-                    </li>
-                    <li>
-                      <a class="see-all" href="javascript:void(0);"
-                        >See all notifications<i class="fa fa-angle-right"></i>
-                      </a>
-                    </li>
-                  </ul>
-                </li>
+                  <li>
+      <div class="dropdown-title">
+        You have <?php echo $productCount; ?> new notification<?php echo $productCount > 1 ? 's' : ''; ?>
+      </div>
+    </li>
+    <li>
+      <div class="notif-scroll scrollbar-outer">
+        <div class="notif-center">
+          <?php foreach ($productsExceedingAverage as $product): ?>
+            <a href="#">
+              <div class="notif-icon notif-primary">
+                <i class="fa fa-box"></i>
+              </div>
+              <div class="notif-content">
+                <span class="block"><?php echo htmlspecialchars($product['name']); ?></span>
+                <span class="time"><?php echo htmlspecialchars($product['quantity']); ?> sold today</span>
+              </div>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    </li>
+    <li>
+      <a class="see-all" href="javascript:void(0);">
+        See all notifications
+        <i class="fa fa-angle-right"></i>
+      </a>
+    </li>
+  </ul>
+</li>
                 
 
                 <li class="nav-item topbar-user dropdown hidden-caret">
@@ -341,7 +372,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                           </div>
                           <div class="u-text">
                             <h4><?php echo $username; ?></h4>
-                            <p class="text-muted">hello@example.com</p>
+                            <p class="text-muted"><?php echo $useremail; ?></p>
                             <a
                               href="profile.php"
                               class="btn btn-xs btn-secondary btn-sm"
@@ -370,7 +401,66 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         <div class="container">
           <div class="page-inner">
-            Profile
+            
+          <div class="container mt-5">
+    <!-- Profile Card -->
+    <div class="card shadow-lg rounded-3 border-0" style="max-width: 600px; margin: auto;">
+        <div class="card-body">
+            <h3 class="card-title text-center mb-4 text-primary">User Profile</h3>
+            <div class="text-center">
+                <img src="../../assets/img/profile.jpg" alt="User Image" class="img-fluid rounded-circle mb-3" style="max-width: 120px; height: 120px; object-fit: cover;">
+                <p><strong class="text-muted">Username:</strong> <?php echo htmlspecialchars($user['username']); ?></p>
+                <p><strong class="text-muted">Email:</strong> <?php echo htmlspecialchars($user['email']); ?></p>
+                <p><strong class="text-muted">Phone Number:</strong> <?php echo htmlspecialchars($user['phone_number']); ?></p>
+                <p><strong class="text-muted">User Type:</strong> <?php echo ucfirst($user['user_type']); ?></p>
+                <p><strong class="text-muted">Joined:</strong> <?php echo date('F d, Y', strtotime($user['created_at'])); ?></p>
+            </div>
+            <div class="text-center">
+                <button class="btn btn-primary px-4 py-2" data-bs-toggle="modal" data-bs-target="#editProfileModal">
+                    <i class="bi bi-pencil"></i> Edit Profile
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Profile Modal -->
+<div class="modal fade" id="editProfileModal" tabindex="-1" aria-labelledby="editProfileModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-3">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="editProfileModalLabel">Edit Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editProfileForm">
+                    <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" value="<?php echo htmlspecialchars($user['username']); ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($user['email']); ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="phone_number" class="form-label">Phone Number</label>
+                        <input type="text" class="form-control" id="phone_number" name="phone_number" value="<?php echo htmlspecialchars($user['phone_number']); ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password (Leave blank if not changing)</label>
+                        <input type="password" class="form-control" id="password" name="password">
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+
           </div>
         </div>
 
@@ -404,6 +494,30 @@ $current_page = basename($_SERVER['PHP_SELF']);
       </div>
 
     </div>
+<!-- Bootstrap JS & AJAX -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(document).ready(function() {
+    $("#editProfileForm").submit(function(event) {
+        event.preventDefault(); // Prevent default form submission
+        
+        $.ajax({
+            url: "update_profile.php", 
+            type: "POST",
+            data: $(this).serialize(),
+            success: function(response) {
+                alert(response);
+                location.reload(); // Reload page after successful update
+            },
+            error: function() {
+                alert("Error updating profile.");
+            }
+        });
+    });
+});
+</script>
+
 
         <script>
     function confirmLogout() {

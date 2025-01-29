@@ -9,6 +9,12 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Check if the logged-in user is an admin
+if ($_SESSION['user_type'] !== 'admin') {
+  // Redirect unauthorized users to the homepage or an error page
+  header('Location: 403.php'); // Use 403 Forbidden error page
+  exit();
+}
 // Fetch the username from the database
 $user_id = $_SESSION['user_id'];
 $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
@@ -412,7 +418,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                           </div>
                           <div class="u-text">
                             <h4><?php echo $username; ?></h4>
-                            <p class="text-muted">hello@example.com</p>
+                            <p class="text-muted"><?php echo $useremail; ?></p>
                             <a
                               href="profile.php"
                               class="btn btn-xs btn-secondary btn-sm"

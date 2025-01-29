@@ -9,6 +9,12 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Check if the logged-in user is an admin
+if ($_SESSION['user_type'] !== 'admin') {
+    // Redirect unauthorized users to the homepage or an error page
+    header('Location: 403.php'); // Use 403 Forbidden error page
+    exit();
+  }
 // Fetch the product details from the database
 $product_id = $_GET['id'];
 $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");

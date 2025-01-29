@@ -8,6 +8,12 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Check if the logged-in user is an admin
+if ($_SESSION['user_type'] !== 'admin') {
+    // Redirect unauthorized users to the homepage or an error page
+    header('Location: 403.php'); // Use 403 Forbidden error page
+    exit();
+  }
 // Get product ID and image from the URL
 $product_id = $_GET['id'];
 $product_image = $_GET['image'];

@@ -1,19 +1,52 @@
 <?php
-// Start the session
-session_start();
+require '../../src/db/db_connection.php'; // Include database connection
 
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
-    // Redirect to login.php if no user is logged in
     header('Location: ../../login.php');
     exit();
 }
 
+// Check if the logged-in user is an admin
+if ($_SESSION['user_type'] !== 'admin') {
+  // Redirect unauthorized users to the homepage or an error page
+  header('Location: 403.php'); // Use 403 Forbidden error page
+  exit();
+}
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
+// Get the logged-in user's email
+$useremail = htmlspecialchars($_SESSION['email']);
 
-// Get the current page name
-$current_page = basename($_SERVER['PHP_SELF']);
+// Fetch users with user_type 'user' from the database
+$query = "SELECT id, username, email, phone_number, created_at, status FROM users WHERE user_type = 'user'";
+$stmt = $pdo->prepare($query);
+$stmt->execute();
+$users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Handle Enable/Disable/Delete Actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['action']) && isset($_POST['user_id'])) {
+        $user_id = $_POST['user_id'];
+
+        if ($_POST['action'] === 'toggle_status') {
+            // Toggle user status between active and inactive
+            $update_status_query = "UPDATE users SET status = IF(status = 'active', 'inactive', 'active') WHERE id = ?";
+            $stmt = $pdo->prepare($update_status_query);
+            $stmt->execute([$user_id]);
+
+        } elseif ($_POST['action'] === 'delete') {
+            // Delete user from database
+            $delete_query = "DELETE FROM users WHERE id = ?";
+            $stmt = $pdo->prepare($delete_query);
+            $stmt->execute([$user_id]);
+        }
+
+        // Redirect to refresh the page
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -341,7 +374,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                           </div>
                           <div class="u-text">
                             <h4><?php echo $username; ?></h4>
-                            <p class="text-muted">hello@example.com</p>
+                            <p class="text-muted"><?php echo $useremail; ?></p>
                             <a
                               href="profile.php"
                               class="btn btn-xs btn-secondary btn-sm"
@@ -368,10 +401,60 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </div>
 
         <div class="container">
-          <div class="page-inner">
-            User List
-          </div>
-        </div>
+    <div class="page-inner">
+        <h2>User List</h2>
+        <table class="table table-bordered mt-3">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Phone Number</th>
+                    <th>Created At</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($users)): ?>
+                    <?php foreach ($users as $user): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($user['id']); ?></td>
+                            <td><?php echo htmlspecialchars($user['username']); ?></td>
+                            <td><?php echo htmlspecialchars($user['email']); ?></td>
+                            <td><?php echo htmlspecialchars($user['phone_number']); ?></td>
+                            <td><?php echo htmlspecialchars($user['created_at']); ?></td>
+                            <td>
+                                <?php echo $user['status'] === 'active' ? '<span class="text-success">Active</span>' : '<span class="text-danger">Inactive</span>'; ?>
+                            </td>
+                            <td>
+                                <!-- Enable/Disable Button -->
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                                    <button type="submit" name="action" value="toggle_status" class="btn btn-sm btn-warning">
+                                        <?php echo $user['status'] === 'active' ? 'Disable' : 'Enable'; ?>
+                                    </button>
+                                </form>
+
+                                <!-- Delete Button -->
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                                    <button type="submit" name="action" value="delete" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this user?');">
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="7" class="text-center">No users found.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">

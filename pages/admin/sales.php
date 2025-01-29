@@ -13,8 +13,16 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Check if the logged-in user is an admin
+if ($_SESSION['user_type'] !== 'admin') {
+  // Redirect unauthorized users to the homepage or an error page
+  header('Location: 403.php'); // Use 403 Forbidden error page
+  exit();
+}
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
+// Get the logged-in user's email
+$useremail = htmlspecialchars($_SESSION['email']);
 
 
 $currentMonth = date('F'); // e.g., "January"
@@ -88,6 +96,23 @@ $monthly_data_query = "
 ";
 $monthly_data_stmt = $pdo->query($monthly_data_query);
 $monthly_data = $monthly_data_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch paid orders grouped by product name for today
+$query = "
+    SELECT 
+        p.image, 
+        p.product_name, 
+        SUM(o.quantity) AS total_sold, 
+        SUM(o.price * o.quantity) AS total_sales
+    FROM orders o
+    JOIN paid pd ON o.id = pd.order_id
+    JOIN products p ON o.product_id = p.id
+    WHERE DATE(pd.paid_at) = CURDATE()
+    GROUP BY p.id
+";
+$stmt = $pdo->prepare($query);
+$stmt->execute();
+$paid_orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 
@@ -420,7 +445,7 @@ $monthly_data = $monthly_data_stmt->fetchAll(PDO::FETCH_ASSOC);
                           </div>
                           <div class="u-text">
                             <h4><?php echo $username; ?></h4>
-                            <p class="text-muted">hello@example.com</p>
+                            <p class="text-muted"><?php echo $useremail; ?></p>
                             <a
                               href="profile.php"
                               class="btn btn-xs btn-secondary btn-sm"
@@ -514,7 +539,42 @@ $monthly_data = $monthly_data_stmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
         </div>
     </div>
+    <div class="container mt-4">
+    <h2 class="mb-3">Today's Sales Report</h2>
+    <table class="table table-bordered text-center">
+        <thead class="table-dark">
+            <tr>
+                <th>Product Image</th>
+                <th>Product Name</th>
+                <th>Total Sold</th>
+                <th>Total Sales (₱)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (!empty($paid_orders)): ?>
+                <?php foreach ($paid_orders as $order): ?>
+                    <tr>
+                        <td>
+                            <img src="<?php echo htmlspecialchars($order['image']); ?>" 
+                                 alt="<?php echo htmlspecialchars($order['product_name']); ?>" 
+                                 style="width: 60px; height: 60px; object-fit: cover; border-radius: 5px;">
+                        </td>
+                        <td><?php echo htmlspecialchars($order['product_name']); ?></td>
+                        <td><?php echo number_format($order['total_sold']); ?></td>
+                        <td>₱<?php echo number_format($order['total_sales'], 2); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <tr>
+                    <td colspan="4" class="text-center text-danger">No sales recorded today.</td>
+                </tr>
+            <?php endif; ?>
+        </tbody>
+    </table>
 </div>
+</div>
+
+
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
