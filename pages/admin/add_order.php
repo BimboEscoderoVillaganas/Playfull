@@ -380,25 +380,26 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="row">
             <!-- Left column: Display all products -->
             <div class="col-md-6" style="max-height: 400px; overflow-y: auto;">
-                <h3>Products</h3>
-                <ul class="list-group" id="productList">
-                    <?php foreach ($products as $product): ?>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
-                            <?php echo htmlspecialchars($product['product_name']); ?> - ₱<?php echo htmlspecialchars($product['price']); ?>
-                            <button class="btn btn-primary btn-sm" 
-        onclick="selectProduct(<?php echo $product['id']; ?>, 
-                               '<?php echo htmlspecialchars($product['product_name']); ?>', 
-                               <?php echo $product['price']; ?>, 
-                               '<?php echo htmlspecialchars($product['image']); ?>')">
-    Select
-</button>
-
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3>Products</h3>
+    </div>
+    <ul class="list-group" id="productList">
+        <?php foreach ($products as $product): ?>
+            <li class="list-group-item d-flex justify-content-between align-items-center product-item">
+                <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+                <span class="product-name"><?php echo htmlspecialchars($product['product_name']); ?></span> - 
+                ₱<?php echo htmlspecialchars($product['price']); ?>
+                <button class="btn btn-primary btn-sm" 
+                    onclick="selectProduct(<?php echo $product['id']; ?>, 
+                                           '<?php echo htmlspecialchars($product['product_name']); ?>', 
+                                           <?php echo $product['price']; ?>, 
+                                           '<?php echo htmlspecialchars($product['image']); ?>')">
+                    Select
+                </button>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</div>
             <!-- Right column: Display selected products with quantity input -->
             <div class="col-md-6" style="position: sticky; top: 0;">
                 <h3>Selected Products</h3>
@@ -454,6 +455,8 @@ $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     
     <script>
+      
+
       // Select product and add to order form
       function selectProduct(id, name, price, image) {
     var selectedProductsDiv = document.getElementById('selectedProducts');

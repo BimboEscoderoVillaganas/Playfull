@@ -1,52 +1,62 @@
 <?php
+require '../../src/db/db_connection.php'; // Include the database connection
 
-// Database connection
-require_once '../../src/db/db_connection.php';
+if (isset($_GET['order_number']) && isset($_GET['created_at'])) {
+    $order_number = $_GET['order_number'];
+    $created_at = $_GET['created_at'];
 
-// Check if the user is logged in
-if (!isset($_SESSION['user_id'])) {
-    // Redirect to login.php if no user is logged in
-    header('Location: ../../login.php');
-    exit();
-}
+    // Retrieve all order IDs with the same order_number
+    $query = "SELECT id FROM orders WHERE order_number = :order_number";
+    
+    $stmt = $pdo->prepare($query);
+    $stmt->bindParam(':order_number', $order_number, PDO::PARAM_STR);
+    $stmt->execute();
+    
+    if ($stmt->rowCount() > 0) {
+        // Loop through all orders with the same order_number
+        while ($order = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $order_id = $order['id'];
 
-// Get the order number and created_at from the query parameters
-$order_number = $_GET['order_number'];
-$created_at = $_GET['created_at'];
+            // Insert into paid table for each order
+            $insert_query = "INSERT INTO paid (order_id) VALUES (:order_id)";
+            $insert_stmt = $pdo->prepare($insert_query);
+            $insert_stmt->bindParam(':order_id', $order_id, PDO::PARAM_INT);
 
-try {
-    // Start a transaction
-    $pdo->beginTransaction();
+            // If any insert fails, show an error message and break out of the loop
+            if (!$insert_stmt->execute()) {
+                echo "<script>
+                        alert('Error marking order as paid.');
+                        window.location.href = 'served_order.php';
+                      </script>";
+                exit;
+            }
 
-    // Get the order ID based on the order_number and created_at
-    $stmt = $pdo->prepare("SELECT id FROM orders WHERE order_number = ? AND created_at = ?");
-    $stmt->execute([$order_number, $created_at]);
-    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Check if the order is in the served table, and remove it if it exists
+            $check_served_query = "SELECT id FROM served WHERE order_id = :order_id";
+            $check_served_stmt = $pdo->prepare($check_served_query);
+            $check_served_stmt->bindParam(':order_id', $order_id, PDO::PARAM_INT);
+            $check_served_stmt->execute();
 
-    if ($order) {
-        $order_id = $order['id'];
+            if ($check_served_stmt->rowCount() > 0) {
+                // Remove the order from the served table
+                $delete_served_query = "DELETE FROM served WHERE order_id = :order_id";
+                $delete_served_stmt = $pdo->prepare($delete_served_query);
+                $delete_served_stmt->bindParam(':order_id', $order_id, PDO::PARAM_INT);
+                $delete_served_stmt->execute();
+            }
+        }
 
-        // Insert into the paid table
-        $stmt = $pdo->prepare("INSERT INTO paid (order_id) VALUES (?)");
-        $stmt->execute([$order_id]);
-
-        // Delete associated details from the order_details table
-        $stmt = $pdo->prepare("DELETE FROM order_details WHERE order_id = ?");
-        $stmt->execute([$order_id]);
-
-        // Commit the transaction
-        $pdo->commit();
+        // Success message and redirection to served_order.php
+        echo "<script>
+                alert('All orders marked as paid and removed from served successfully.');
+                window.location.href = 'served_order.php';
+              </script>";
     } else {
-        // Rollback the transaction if the order is not found
-        $pdo->rollBack();
+        // Order not found message and redirection to served_order.php
+        echo "<script>
+                alert('Order not found.');
+                window.location.href = 'served_order.php';
+              </script>";
     }
-} catch (Exception $e) {
-    // Rollback the transaction in case of error
-    $pdo->rollBack();
-    throw $e;
 }
-
-// Redirect back to the order records page
-header('Location: order_records.php');
-exit();
 ?>

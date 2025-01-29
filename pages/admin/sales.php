@@ -22,7 +22,7 @@ $currentYear = date('Y'); // e.g., "2025"
 
 // Get daily sales total
 $daily_query = "
-    SELECT SUM(o.total_amount) as daily_total 
+    SELECT SUM(o.price * o.quantity) as daily_total 
     FROM orders o 
     JOIN paid p ON o.id = p.order_id 
     WHERE DATE(p.paid_at) = CURDATE()
@@ -33,7 +33,7 @@ $daily_total = $daily_row['daily_total'] ?? 0;
 
 // Get weekly sales total
 $weekly_query = "
-    SELECT SUM(o.total_amount) as weekly_total 
+    SELECT SUM(o.price * o.quantity) as weekly_total 
     FROM orders o 
     JOIN paid p ON o.id = p.order_id 
     WHERE WEEK(p.paid_at, 1) = WEEK(CURDATE(), 1) AND YEAR(p.paid_at) = YEAR(CURDATE())
@@ -44,7 +44,7 @@ $weekly_total = $weekly_row['weekly_total'] ?? 0;
 
 // Get monthly sales total
 $monthly_query = "
-    SELECT SUM(o.total_amount) as monthly_total 
+    SELECT SUM(o.price * o.quantity) as monthly_total 
     FROM orders o 
     JOIN paid p ON o.id = p.order_id 
     WHERE MONTH(p.paid_at) = MONTH(CURDATE()) AND YEAR(p.paid_at) = YEAR(CURDATE())
@@ -52,9 +52,10 @@ $monthly_query = "
 $monthly_stmt = $pdo->query($monthly_query);
 $monthly_row = $monthly_stmt->fetch(PDO::FETCH_ASSOC);
 $monthly_total = $monthly_row['monthly_total'] ?? 0;
+
 // Fetch daily sales data for the current week
 $daily_data_query = "
-    SELECT DAYNAME(p.paid_at) AS day, SUM(o.total_amount) AS total 
+    SELECT DAYNAME(p.paid_at) AS day, SUM(o.price * o.quantity) AS total 
     FROM orders o 
     JOIN paid p ON o.id = p.order_id 
     WHERE WEEK(p.paid_at, 1) = WEEK(CURDATE(), 1) AND YEAR(p.paid_at) = YEAR(CURDATE())
@@ -66,7 +67,7 @@ $daily_data = $daily_data_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch weekly sales data for the current month
 $weekly_data_query = "
-    SELECT WEEK(p.paid_at, 1) AS week, SUM(o.total_amount) AS total 
+    SELECT WEEK(p.paid_at, 1) AS week, SUM(o.price * o.quantity) AS total 
     FROM orders o 
     JOIN paid p ON o.id = p.order_id 
     WHERE MONTH(p.paid_at) = MONTH(CURDATE()) AND YEAR(p.paid_at) = YEAR(CURDATE())
@@ -78,7 +79,7 @@ $weekly_data = $weekly_data_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch monthly sales data for the current year
 $monthly_data_query = "
-    SELECT MONTHNAME(p.paid_at) AS month, SUM(o.total_amount) AS total 
+    SELECT MONTHNAME(p.paid_at) AS month, SUM(o.price * o.quantity) AS total 
     FROM orders o 
     JOIN paid p ON o.id = p.order_id 
     WHERE YEAR(p.paid_at) = YEAR(CURDATE())
@@ -88,6 +89,8 @@ $monthly_data_query = "
 $monthly_data_stmt = $pdo->query($monthly_data_query);
 $monthly_data = $monthly_data_stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
+
 
 
 <!DOCTYPE html>

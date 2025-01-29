@@ -12,16 +12,21 @@ if (!isset($_SESSION['user_id'])) {
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
 
-// Fetch orders and order details, excluding paid orders
+// Fetch served orders, grouping them by order_number
+// Fetch served orders with proper grouping by order_number and correct total_amount calculation
 $query = "
-    SELECT o.order_number, o.total_amount, o.created_at, GROUP_CONCAT(od.product_name SEPARATOR '|') AS product_names, GROUP_CONCAT(od.quantity SEPARATOR '|') AS quantities
-    FROM orders o
-    JOIN order_details od ON o.id = od.order_id
-    LEFT JOIN paid p ON o.id = p.order_id
-    WHERE p.order_id IS NULL
-    GROUP BY o.order_number, o.total_amount, o.created_at
-    ORDER BY o.created_at ASC, o.order_number
+SELECT o.order_number, SUM(o.price * o.quantity) AS total_amount, o.created_at, 
+       GROUP_CONCAT(p.product_name SEPARATOR '|') AS product_names, 
+       GROUP_CONCAT(o.quantity SEPARATOR '|') AS quantities
+FROM orders o
+JOIN products p ON o.product_id = p.id
+JOIN served s ON o.id = s.order_id
+LEFT JOIN paid p2 ON o.id = p2.order_id
+WHERE p2.order_id IS NULL
+GROUP BY o.order_number
+ORDER BY o.created_at ASC, o.order_number
 ";
+
 $stmt = $pdo->query($query);
 
 $orders = [];
@@ -39,14 +44,14 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         ];
     }
 
-    // Store grouped order data
-    $orders[] = [
-        'order_number' => $row['order_number'],
+    // Store grouped order data by order_number
+    $orders[$row['order_number']][] = [
         'created_at' => $row['created_at'],
         'total_amount' => $row['total_amount'],
         'details' => $details
     ];
 }
+
 ?>
 
 <!DOCTYPE html>
@@ -416,37 +421,39 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     <div class="page-inner">
         <h2 class="mb-4">Served Orders Record</h2>
         <div class="row">
-            <?php foreach ($orders as $order): ?>
+            <?php foreach ($orders as $orderNumber => $orderGroup): ?>
                 <div class="col-md-4 mb-4">
                     <div class="d-flex flex-column border p-3 h-100">
                         <div class="mb-3">
                             <div class="d-flex justify-content-between">
                                 <div style="font-size: 10px;">
-                                    <strong>Date Ordered:</strong> <?php echo htmlspecialchars(date('Y-m-d', strtotime($order['created_at']))); ?>
+                                    <strong>Date Ordered:</strong> <?php echo htmlspecialchars(date('Y-m-d', strtotime($orderGroup[0]['created_at']))); ?>
                                 </div>
                                 <div style="font-size: 14px;">
-                                    <strong>Order Number/Name:</strong> <span style="font-size: 15px; color: blue;"><?php echo htmlspecialchars($order['order_number']); ?></span>
+                                    <strong>Order Number/Name:</strong> <span style="font-size: 15px; color: blue;"><?php echo htmlspecialchars($orderNumber); ?></span>
                                 </div>
                             </div>
                         </div>
                         <div class="mb-3 flex-grow-1">
                             <strong>Orders:</strong>
                             <ul class="list-group mt-2">
-                                <?php foreach ($order['details'] as $detail): ?>
-                                    <li class="list-group-item d-flex justify-content-between">
-                                        <span><?php echo htmlspecialchars($detail['product_name']); ?></span>
-                                        <span class="float-right">x<?php echo htmlspecialchars($detail['quantity']); ?></span>
-                                    </li>
+                                <?php foreach ($orderGroup as $order): ?>
+                                    <?php foreach ($order['details'] as $detail): ?>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span><?php echo htmlspecialchars($detail['product_name']); ?></span>
+                                            <span class="float-right">x<?php echo htmlspecialchars($detail['quantity']); ?></span>
+                                        </li>
+                                    <?php endforeach; ?>
                                 <?php endforeach; ?>
                             </ul>
                         </div>
                         <div class="mt-auto text-right">
-                            <strong>Total Amount:</strong> <span style="color: red;">₱<?php echo htmlspecialchars($order['total_amount']); ?></span>
+                            <strong>Total Amount:</strong> <span style="color: red;">₱<?php echo htmlspecialchars($orderGroup[0]['total_amount']); ?></span>
                         </div>
-                        <div class="mt-3 d-flex justify-content-between">
-                            <a href="#" onclick="confirmDelete('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-danger btn-sm">Delete</a>
-                            <a href="edit_order.php?order_number=<?php echo htmlspecialchars($order['order_number']); ?>&created_at=<?php echo htmlspecialchars($order['created_at']); ?>" class="btn btn-secondary btn-sm">Edit</a>
-                            <a href="#" onclick="markPaid('<?php echo htmlspecialchars($order['order_number']); ?>', '<?php echo htmlspecialchars($order['created_at']); ?>')" class="btn btn-success btn-sm">Paid</a>
+                        <div class="mt-3 d-flex justify-content-between"><!--
+                            <a href="#" onclick="confirmDelete('<?php echo htmlspecialchars($orderNumber); ?>', '<?php echo htmlspecialchars($orderGroup[0]['created_at']); ?>')" class="btn btn-danger btn-sm">Delete</a>
+                            <a href="edit_order.php?order_number=<?php echo htmlspecialchars($orderNumber); ?>&created_at=<?php echo htmlspecialchars($orderGroup[0]['created_at']); ?>" class="btn btn-secondary btn-sm">Edit</a>-->
+                            <a href="#" onclick="markPaid('<?php echo htmlspecialchars($orderNumber); ?>', '<?php echo htmlspecialchars($orderGroup[0]['created_at']); ?>')" class="btn btn-success btn-sm">Mark as Paid</a>
                         </div>
                     </div>
                 </div>

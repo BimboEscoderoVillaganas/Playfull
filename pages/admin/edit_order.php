@@ -22,26 +22,41 @@ $orderDetails = [];
 $totalAmount = 0;
 
 if ($order_number) {
-    // Fetch order data
-    $query = "SELECT * FROM orders WHERE order_number = ?";
-    $stmt = $pdo->prepare($query);
-    $stmt->execute([$order_number]);
-    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+  // Fetch order data
+  $query = "SELECT * 
+            FROM orders 
+            WHERE order_number = ? 
+            AND id NOT IN (
+                SELECT order_id FROM paid
+            ) 
+            AND id NOT IN (
+                SELECT order_id FROM served
+            )";
+  $stmt = $pdo->prepare($query);
+  $stmt->execute([$order_number]);
+  $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Fetch order details
-    $query = "SELECT o.id, p.product_name, o.quantity, o.price, p.image 
-              FROM orders o 
-              JOIN products p ON o.product_id = p.id 
-              WHERE o.order_number = ?";
-    $stmt = $pdo->prepare($query);
-    $stmt->execute([$order_number]);
-    $orderDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  // Fetch order details
+  $query = "SELECT o.id, p.product_name, o.quantity, o.price, p.image 
+            FROM orders o 
+            JOIN products p ON o.product_id = p.id 
+            WHERE o.order_number = ? 
+            AND o.id NOT IN (
+                SELECT order_id FROM paid
+            ) 
+            AND o.id NOT IN (
+                SELECT order_id FROM served
+            )";
+  $stmt = $pdo->prepare($query);
+  $stmt->execute([$order_number]);
+  $orderDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Calculate total amount
-    foreach ($orderDetails as $detail) {
-        $totalAmount += $detail['quantity'] * $detail['price'];
-    }
+  // Calculate total amount
+  foreach ($orderDetails as $detail) {
+      $totalAmount += $detail['quantity'] * $detail['price'];
+  }
 }
+
 ?>
 
 
@@ -52,7 +67,7 @@ if ($order_number) {
 <html lang="en">
   <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>PlayFull Bistro add order</title>
+    <title>PlayFull Bistro edit order</title>
     <meta
       content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
       name="viewport"
@@ -519,11 +534,13 @@ if ($order_number) {
 
 
 
-    function deleteProduct(button, productId) {
+function deleteProduct(button, productId) {
     // Ask for confirmation before deleting
     if (confirm('Are you sure you want to delete this product?')) {
-        if (productId > 0) { // Existing product in the database
-            // Perform an AJAX request to delete the product from the database
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
             fetch('delete.php', {
                 method: 'POST',
                 headers: {
@@ -534,28 +551,508 @@ if ($order_number) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    var productDiv = button.parentElement.parentElement;
-                    productDiv.remove();
-                    updateTotalAmount(); // Update total amount after deletion
                     alert('Product deleted successfully.');
                 } else {
-                    alert('Failed to delete product.');
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred while deleting the product.');
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
             });
         } else {
-            // If the product is not saved (ID = 0), just remove it from the DOM
-            var productDiv = button.parentElement.parentElement;
+            // Product does not exist in the database, just remove it from selectedProducts
             productDiv.remove();
             updateTotalAmount(); // Update total amount after deletion
         }
     }
 }
 
+function selectProduct(id, name, price, image) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+            <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
 
+
+
+
+function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
+            });
+        } else {
+            // Product does not exist in the database, just remove it from selectedProducts
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
+        }
+    }
+}
+function selectProduct(id, name, price, image) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+            <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+
+
+
+function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
+            });
+        } else {
+            // Product does not exist in the database, just remove it from selectedProducts
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
+        }
+    }
+}
+function selectProduct(id, name, price, image) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+            <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+
+
+
+function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
+            });
+        } else {
+            // Product does not exist in the database, just remove it from selectedProducts
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
+        }
+    }
+}
+function selectProduct(id, name, price, image) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+            <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+
+
+
+function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
+            });
+        } else {
+            // Product does not exist in the database, just remove it from selectedProducts
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
+        }
+    }
+}
+function selectProduct(id, name, price, image) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+            <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+
+
+
+function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
+            });
+        } else {
+            // Product does not exist in the database, just remove it from selectedProducts
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
+        }
+    }
+}
+function selectProduct(id, name, price, image) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+            <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+
+
+
+function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
+            });
+        } else {
+            // Product does not exist in the database, just remove it from selectedProducts
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
+        }
+    }
+}
+function selectProduct(id, name, price, image) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+            <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+
+
+
+function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
+            });
+        } else {
+            // Product does not exist in the database, just remove it from selectedProducts
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
+        }
+    }
+}
+function selectProduct(id, name, price, image) {
+    var selectedProductsDiv = document.getElementById('selectedProducts');
+    var productDiv = document.createElement('div');
+    productDiv.className = 'selected-product mb-3';
+    productDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <img src="${image}" alt="Product Image" style="width: 50px; height: 50px; margin-right: 10px;">
+            <span>${name} - ₱${price}</span>
+            <!-- Remove the hard-coded '0' and use the actual product ID -->
+            <input type="hidden" name="product_ids[]" value="${id}">
+            <input type="hidden" name="product_prices[]" value="${price}">
+            <input type="number" name="quantities[]" class="form-control ml-2" placeholder="Quantity" required oninput="updateTotalAmount()">
+            <button type="button" class="btn btn-danger btn-sm ml-2" onclick="deleteProduct(this, ${id})">Delete</button>
+        </div>
+    `;
+    selectedProductsDiv.appendChild(productDiv);
+    updateTotalAmount();
+}
+
+
+
+
+function deleteProduct(button, productId) {
+    // Ask for confirmation before deleting
+    if (confirm('Are you sure you want to delete this product?')) {
+        const productDiv = button.parentElement.parentElement;
+
+        if (productId > 0) {
+            // Product exists in the database
+            fetch('delete.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: productId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Product deleted successfully.');
+                } else {
+                    alert('Failed to delete product from the database. Selected Order will be removed from the Selected Products.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product from the database.');
+            })
+            .finally(() => {
+                // Remove the product from the UI regardless of database deletion status
+                productDiv.remove();
+                updateTotalAmount(); // Update total amount after deletion
+            });
+        } else {
+            // Product does not exist in the database, just remove it from selectedProducts
+            productDiv.remove();
+            updateTotalAmount(); // Update total amount after deletion
+        }
+    }
+}
 
     function updateTotalAmount() {
         var totalAmount = 0;
