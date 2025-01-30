@@ -21,38 +21,14 @@ $useremail = htmlspecialchars($_SESSION['email']);
 // Get today's date
 $today = date('Y-m-d');
 
-try {
-    // Fetch product sales and calculate the average
-    $query = "SELECT p.id, p.product_name, SUM(o.quantity) AS total_quantity, 
-                     AVG(o.quantity) AS average_quantity
-              FROM paid pa
-              JOIN orders o ON pa.order_id = o.id
-              JOIN products p ON o.product_id = p.id
-              WHERE DATE(pa.paid_at) = ?
-              GROUP BY p.id";
-    $stmt = $pdo->prepare($query);
-    $stmt->execute([$today]);
-    $salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Get the current date's weekday (0 for Sunday, 6 for Saturday)
+$weekday = date('w', strtotime($today));
 
-    // Filter products that reached or exceeded the average
-    $productsExceedingAverage = [];
-    foreach ($salesData as $data) {
-        if ($data['total_quantity'] >= $data['average_quantity']) {
-            $productsExceedingAverage[] = [
-                'name' => $data['product_name'],
-                'quantity' => $data['total_quantity']
-            ];
-        }
-    }
+// Calculate the start and end of the week (Sunday to Monday)
+$startOfWeek = date('Y-m-d', strtotime("-$weekday days"));
+$endOfWeek = date('Y-m-d', strtotime("+" . (6 - $weekday) . " days"));
 
-    // Pass data to frontend
-    $productCount = count($productsExceedingAverage);
-} catch (PDOException $e) {
-    die("Database query failed: " . $e->getMessage());
-}
-$sevenDaysAgo = date('Y-m-d', strtotime('-6 days'));
-
-// Fetch weekly sales data
+// Fetch weekly sales data (from Sunday to Monday)
 $weeklySalesQuery = "SELECT DATE(pa.paid_at) AS sale_date, SUM(o.quantity * o.price) AS total_sales
                      FROM paid pa
                      JOIN orders o ON pa.order_id = o.id
@@ -61,15 +37,15 @@ $weeklySalesQuery = "SELECT DATE(pa.paid_at) AS sale_date, SUM(o.quantity * o.pr
                      ORDER BY sale_date ASC";
 
 $weeklyStmt = $pdo->prepare($weeklySalesQuery);
-$weeklyStmt->execute([$sevenDaysAgo, $today]);
+$weeklyStmt->execute([$startOfWeek, $endOfWeek]);
 $weeklySalesData = $weeklyStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Process weekly sales data
 $weeklyLabels = [];
 $weeklySales = [];
 
-for ($i = 6; $i >= 0; $i--) {
-    $date = date('Y-m-d', strtotime("-$i days"));
+for ($i = 0; $i <= 6; $i++) {
+    $date = date('Y-m-d', strtotime("+$i days", strtotime($startOfWeek)));
     $weeklyLabels[] = date('M d', strtotime($date));
     $salesFound = false;
 
@@ -106,22 +82,14 @@ foreach ($productSalesData as $data) {
     $productSales[] = $data['total_sold'];
 }
 
-/* Fetch remaining stock data
+// Fetch remaining stock data excluding inactive products
 $stockQuery = "SELECT p.product_name, p.quantity, 
                       (p.quantity - COALESCE(SUM(o.quantity), 0)) AS remaining_stock
                FROM products p
                LEFT JOIN orders o ON p.id = o.product_id
                LEFT JOIN paid pa ON o.id = pa.order_id AND DATE(pa.paid_at) = ?
-               GROUP BY p.id";*/
-               // Fetch remaining stock data excluding inactive products
-$stockQuery = "SELECT p.product_name, p.quantity, 
-(p.quantity - COALESCE(SUM(o.quantity), 0)) AS remaining_stock
-FROM products p
-LEFT JOIN orders o ON p.id = o.product_id
-LEFT JOIN paid pa ON o.id = pa.order_id AND DATE(pa.paid_at) = ?
-WHERE p.status = 'active'  /* Ensure only active products are included */
-GROUP BY p.id";
-
+               WHERE p.status = 'active'
+               GROUP BY p.id";
 
 $stockStmt = $pdo->prepare($stockQuery);
 $stockStmt->execute([$today]);
