@@ -50,7 +50,6 @@ try {
 } catch (PDOException $e) {
     die("Database query failed: " . $e->getMessage());
 }
-$today = date('Y-m-d');
 $sevenDaysAgo = date('Y-m-d', strtotime('-6 days'));
 
 // Fetch weekly sales data
@@ -107,29 +106,42 @@ foreach ($productSalesData as $data) {
     $productSales[] = $data['total_sold'];
 }
 
-// Fetch remaining stock data
+/* Fetch remaining stock data
 $stockQuery = "SELECT p.product_name, p.quantity, 
                       (p.quantity - COALESCE(SUM(o.quantity), 0)) AS remaining_stock
                FROM products p
                LEFT JOIN orders o ON p.id = o.product_id
                LEFT JOIN paid pa ON o.id = pa.order_id AND DATE(pa.paid_at) = ?
-               GROUP BY p.id";
+               GROUP BY p.id";*/
+               // Fetch remaining stock data excluding inactive products
+$stockQuery = "SELECT p.product_name, p.quantity, 
+(p.quantity - COALESCE(SUM(o.quantity), 0)) AS remaining_stock
+FROM products p
+LEFT JOIN orders o ON p.id = o.product_id
+LEFT JOIN paid pa ON o.id = pa.order_id AND DATE(pa.paid_at) = ?
+WHERE p.status = 'active'  /* Ensure only active products are included */
+GROUP BY p.id";
+
 
 $stockStmt = $pdo->prepare($stockQuery);
 $stockStmt->execute([$today]);
 $stockData = $stockStmt->fetchAll(PDO::FETCH_ASSOC);
 
+$minThreshold = 50; // Set threshold for restocking alert
+
 // Process stock data
 $stockLabels = [];
 $stockRemaining = [];
-$restockWarning = [];
+$threshold = [];
+$lowStockProducts = [];
 
-foreach ($stockData as $data) {
-    $stockLabels[] = $data['product_name'];
-    $stockRemaining[] = max(0, $data['remaining_stock']);
+foreach ($stockData as $stock) {
+    $stockLabels[] = $stock['product_name'];
+    $stockRemaining[] = max(0, $stock['remaining_stock']);
+    $threshold[] = $minThreshold; // Constant threshold line
 
-    if ($data['remaining_stock'] < 50) {
-        $restockWarning[] = "<strong>{$data['product_name']}</strong> is low on stock! Only <strong>{$data['remaining_stock']}</strong> left.";
+    if ($stock['remaining_stock'] < $minThreshold) {
+        $lowStockProducts[] = "<strong>{$stock['product_name']}</strong> is low on stock! Only <strong>{$stock['remaining_stock']}</strong> left.";
     }
 }
 
@@ -140,7 +152,8 @@ $productLabelsJSON = json_encode($productLabels);
 $productSalesJSON = json_encode($productSales);
 $stockLabelsJSON = json_encode($stockLabels);
 $stockRemainingJSON = json_encode($stockRemaining);
-$restockWarningJSON = json_encode($restockWarning);
+$thresholdJSON = json_encode($threshold);
+$lowStockProductsJSON = json_encode($lowStockProducts);
 ?>
 
 
@@ -476,9 +489,6 @@ $restockWarningJSON = json_encode($restockWarning);
         </div>
 
         <div class="container">
-    <div class="page-inner">
-        <h2>Dashboard</h2>
-    </div>
 
     <!-- Charts Container -->
     <div class="row">
@@ -508,12 +518,12 @@ $restockWarningJSON = json_encode($restockWarning);
     </div>
 
     <!-- Stacked Bar/Line Chart (Remaining Stock) -->
-    <div class="row">
+    <div class="row" style="margin:0px 20px;">
         <div class="col-md-12">
             <div class="card shadow-lg mt-4">
                 <div class="card-body">
                     <h4 class="card-title text-center">Remaining Product Stock</h4>
-                    <div class="chart-container">
+                    <div class="chart-container1">
                         <canvas id="remainingStockChart"></canvas>
                     </div>
                     <div id="restockMessage" class="alert alert-warning mt-3" style="display: none;"></div>
@@ -521,7 +531,9 @@ $restockWarningJSON = json_encode($restockWarning);
             </div>
         </div>
     </div>
-</div>
+
+    
+    
 
 
         <footer class="footer">
@@ -615,7 +627,7 @@ $restockWarningJSON = json_encode($restockWarning);
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // Weekly Sales Chart (Point Styling Chart)
+    // Weekly Sales Chart
     new Chart(document.getElementById("salesChart").getContext("2d"), {
         type: "line",
         data: {
@@ -631,14 +643,10 @@ document.addEventListener("DOMContentLoaded", function() {
                 pointHoverRadius: 7
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true }, x: {} }
-        }
+        options: { responsive: true, maintainAspectRatio: false }
     });
 
-    // Product Sales Chart (Doughnut)
+    // Product Sales Chart
     new Chart(document.getElementById("productSalesChart").getContext("2d"), {
         type: "doughnut",
         data: {
@@ -652,29 +660,33 @@ document.addEventListener("DOMContentLoaded", function() {
         options: { responsive: true, maintainAspectRatio: false }
     });
 
-    // Remaining Stock Chart (Stacked Bar)
+    // Remaining Stock Chart
     new Chart(document.getElementById("remainingStockChart").getContext("2d"), {
         type: "bar",
         data: {
             labels: <?php echo $stockLabelsJSON; ?>,
-            datasets: [{
-                label: "Remaining Stock",
-                data: <?php echo $stockRemainingJSON; ?>,
-                backgroundColor: "#FF5733"
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true } }
+            datasets: [
+                {
+                    label: "Remaining Stock",
+                    data: <?php echo $stockRemainingJSON; ?>,
+                    backgroundColor: "#FF5733"
+                },
+                {
+                    label: "Restock Threshold",
+                    data: <?php echo $thresholdJSON; ?>,
+                    type: "line",
+                    borderColor: "#36A2EB",
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false
+                }
+            ]
         }
     });
 
-    // Display Restock Warnings
-    let restockMessages = <?php echo json_encode($restockWarning); ?>;
-    if (restockMessages.length > 0) {
+    if (<?php echo json_encode($lowStockProducts); ?>.length > 0) {
+        document.getElementById("restockMessage").innerHTML = <?php echo json_encode($lowStockProducts); ?>.join("<br>");
         document.getElementById("restockMessage").style.display = "block";
-        document.getElementById("restockMessage").innerHTML = restockMessages.join("<br>");
     }
 });
 </script>
