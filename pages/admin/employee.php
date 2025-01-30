@@ -94,6 +94,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 }
+
+// Get today's date
+$today = date('Y-m-d');
+
+try {
+    // Fetch product sales and calculate the average
+    $query = "SELECT p.id, p.product_name, SUM(o.quantity) AS total_quantity, 
+                     AVG(o.quantity) AS average_quantity
+              FROM paid pa
+              JOIN orders o ON pa.order_id = o.id
+              JOIN products p ON o.product_id = p.id
+              WHERE DATE(pa.paid_at) = ?
+              GROUP BY p.id";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([$today]);
+    $salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Filter products that reached or exceeded the average
+    $productsExceedingAverage = [];
+    foreach ($salesData as $data) {
+        if ($data['total_quantity'] >= $data['average_quantity']) {
+            $productsExceedingAverage[] = [
+                'name' => $data['product_name'],
+                'quantity' => $data['total_quantity']
+            ];
+        }
+    }
+
+    // Pass data to frontend
+    $productCount = count($productsExceedingAverage);
+} catch (PDOException $e) {
+    die("Database query failed: " . $e->getMessage());
+}
 ?>
 
 
@@ -310,7 +343,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </nav>
 
               <ul class="navbar-nav topbar-nav ms-md-auto align-items-center">
-                <li class="nav-item topbar-icon dropdown hidden-caret">
+              <li class="nav-item topbar-icon dropdown hidden-caret">
                   <a
                     class="nav-link dropdown-toggle"
                     href="#"
@@ -321,73 +354,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     aria-expanded="false"
                   >
                     <i class="fa fa-bell"></i>
-                    <span class="notification">4</span>
+                    <span class="notification"><?php echo $productCount; ?></span>
                   </a>
                   <ul
                     class="dropdown-menu notif-box animated fadeIn"
                     aria-labelledby="notifDropdown"
                   >
-                    <li>
-                      <div class="dropdown-title">
-                        You have 4 new notification
-                      </div>
-                    </li>
-                    <li>
-                      <div class="notif-scroll scrollbar-outer">
-                        <div class="notif-center">
-                          <a href="#">
-                            <div class="notif-icon notif-primary">
-                              <i class="fa fa-user-plus"></i>
-                            </div>
-                            <div class="notif-content">
-                              <span class="block"> New user registered </span>
-                              <span class="time">5 minutes ago</span>
-                            </div>
-                          </a>
-                          <a href="#">
-                            <div class="notif-icon notif-success">
-                              <i class="fa fa-comment"></i>
-                            </div>
-                            <div class="notif-content">
-                              <span class="block">
-                                Rahmad commented on Admin
-                              </span>
-                              <span class="time">12 minutes ago</span>
-                            </div>
-                          </a>
-                          <a href="#">
-                            <div class="notif-img">
-                              <img
-                                src="../../assets/img/profile2.jpg"
-                                alt="Img Profile"
-                              />
-                            </div>
-                            <div class="notif-content">
-                              <span class="block">
-                                Reza send messages to you
-                              </span>
-                              <span class="time">12 minutes ago</span>
-                            </div>
-                          </a>
-                          <a href="#">
-                            <div class="notif-icon notif-danger">
-                              <i class="fa fa-heart"></i>
-                            </div>
-                            <div class="notif-content">
-                              <span class="block"> Farrah liked Admin </span>
-                              <span class="time">17 minutes ago</span>
-                            </div>
-                          </a>
-                        </div>
-                      </div>
-                    </li>
-                    <li>
-                      <a class="see-all" href="javascript:void(0);"
-                        >See all notifications<i class="fa fa-angle-right"></i>
-                      </a>
-                    </li>
-                  </ul>
-                </li>
+                  <li>
+      <div class="dropdown-title">
+        You have <?php echo $productCount; ?> new notification<?php echo $productCount > 1 ? 's' : ''; ?>
+      </div>
+    </li>
+    <li>
+      <div class="notif-scroll scrollbar-outer">
+        <div class="notif-center">
+          <?php foreach ($productsExceedingAverage as $product): ?>
+            <a href="#">
+              <div class="notif-icon notif-primary">
+                <i class="fa fa-box"></i>
+              </div>
+              <div class="notif-content">
+                <span class="block"><?php echo htmlspecialchars($product['name']); ?></span>
+                <span class="time"><?php echo htmlspecialchars($product['quantity']); ?> sold today</span>
+              </div>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    </li>
+    <li>
+      <a class="see-all" href="javascript:void(0);">
+        See all notifications
+        <i class="fa fa-angle-right"></i>
+      </a>
+    </li>
+  </ul>
+</li>
                 
 
                 <li class="nav-item topbar-user dropdown hidden-caret">
