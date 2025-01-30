@@ -1,27 +1,23 @@
-<?php
+<?php 
 // Include database connection
 include '../../src/db/db_connection.php';
 
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
-    // Redirect to login.php if no user is logged in
     header('Location: ../../login.php');
     exit();
 }
 
 // Check if the logged-in user is an admin
 if ($_SESSION['user_type'] !== 'admin') {
-  // Redirect unauthorized users to the homepage or an error page
-  header('Location: 403.php'); // Use 403 Forbidden error page
-  exit();
+    header('Location: 403.php');
+    exit();
 }
-
 
 // Get the logged-in user's name
 $username = htmlspecialchars($_SESSION['username']);
 // Get the logged-in user's email
 $useremail = htmlspecialchars($_SESSION['email']);
-
 // Get today's date
 $today = date('Y-m-d');
 
@@ -54,7 +50,99 @@ try {
 } catch (PDOException $e) {
     die("Database query failed: " . $e->getMessage());
 }
+$today = date('Y-m-d');
+$sevenDaysAgo = date('Y-m-d', strtotime('-6 days'));
+
+// Fetch weekly sales data
+$weeklySalesQuery = "SELECT DATE(pa.paid_at) AS sale_date, SUM(o.quantity * o.price) AS total_sales
+                     FROM paid pa
+                     JOIN orders o ON pa.order_id = o.id
+                     WHERE DATE(pa.paid_at) BETWEEN ? AND ?
+                     GROUP BY sale_date
+                     ORDER BY sale_date ASC";
+
+$weeklyStmt = $pdo->prepare($weeklySalesQuery);
+$weeklyStmt->execute([$sevenDaysAgo, $today]);
+$weeklySalesData = $weeklyStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Process weekly sales data
+$weeklyLabels = [];
+$weeklySales = [];
+
+for ($i = 6; $i >= 0; $i--) {
+    $date = date('Y-m-d', strtotime("-$i days"));
+    $weeklyLabels[] = date('M d', strtotime($date));
+    $salesFound = false;
+
+    foreach ($weeklySalesData as $data) {
+        if ($data['sale_date'] === $date) {
+            $weeklySales[] = $data['total_sales'];
+            $salesFound = true;
+            break;
+        }
+    }
+    if (!$salesFound) {
+        $weeklySales[] = 0;
+    }
+}
+
+// Fetch today's product sales data
+$productSalesQuery = "SELECT p.product_name, SUM(o.quantity) AS total_sold 
+                      FROM products p
+                      JOIN orders o ON p.id = o.product_id
+                      JOIN paid pa ON o.id = pa.order_id
+                      WHERE DATE(pa.paid_at) = ?
+                      GROUP BY p.product_name";
+
+$productStmt = $pdo->prepare($productSalesQuery);
+$productStmt->execute([$today]);
+$productSalesData = $productStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Process product sales data
+$productLabels = [];
+$productSales = [];
+
+foreach ($productSalesData as $data) {
+    $productLabels[] = $data['product_name'];
+    $productSales[] = $data['total_sold'];
+}
+
+// Fetch remaining stock data
+$stockQuery = "SELECT p.product_name, p.quantity, 
+                      (p.quantity - COALESCE(SUM(o.quantity), 0)) AS remaining_stock
+               FROM products p
+               LEFT JOIN orders o ON p.id = o.product_id
+               LEFT JOIN paid pa ON o.id = pa.order_id AND DATE(pa.paid_at) = ?
+               GROUP BY p.id";
+
+$stockStmt = $pdo->prepare($stockQuery);
+$stockStmt->execute([$today]);
+$stockData = $stockStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Process stock data
+$stockLabels = [];
+$stockRemaining = [];
+$restockWarning = [];
+
+foreach ($stockData as $data) {
+    $stockLabels[] = $data['product_name'];
+    $stockRemaining[] = max(0, $data['remaining_stock']);
+
+    if ($data['remaining_stock'] < 50) {
+        $restockWarning[] = "<strong>{$data['product_name']}</strong> is low on stock! Only <strong>{$data['remaining_stock']}</strong> left.";
+    }
+}
+
+// Convert data to JSON for JavaScript
+$weeklyLabelsJSON = json_encode($weeklyLabels);
+$weeklySalesJSON = json_encode($weeklySales);
+$productLabelsJSON = json_encode($productLabels);
+$productSalesJSON = json_encode($productSales);
+$stockLabelsJSON = json_encode($stockLabels);
+$stockRemainingJSON = json_encode($stockRemaining);
+$restockWarningJSON = json_encode($restockWarning);
 ?>
+
 
 
 
@@ -101,6 +189,12 @@ try {
     <link rel="stylesheet" href="../../assets/css/kaiadmin.min.css" />
 
   </head>
+  <style>
+.chart-container {
+    width: 100%;
+    height: 200px;
+}
+</style>
   <body>
     <div class="wrapper">
       <!-- Sidebar -->
@@ -313,8 +407,8 @@ try {
       </div>
     </li>
     <li>
-      <a class="see-all" href="javascript:void(0);">
-        See all notifications
+      <a class="see-all" href="sales.php">
+        View all
         <i class="fa fa-angle-right"></i>
       </a>
     </li>
@@ -382,10 +476,53 @@ try {
         </div>
 
         <div class="container">
-          <div class="page-inner">
-            Dashboard
-          </div>
+    <div class="page-inner">
+        <h2>Dashboard</h2>
+    </div>
+
+    <!-- Charts Container -->
+    <div class="row">
+        <!-- Point Styling Chart (Weekly Sales) -->
+        <div class="col-md-6">
+            <div class="card shadow-lg mt-4">
+                <div class="card-body">
+                    <h4 class="card-title text-center">Weekly Sales Overview</h4>
+                    <div class="chart-container">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <!-- Doughnut Chart (Product Sales Breakdown) -->
+        <div class="col-md-6">
+            <div class="card shadow-lg mt-4">
+                <div class="card-body">
+                    <h4 class="card-title text-center">Today's Product Sales</h4>
+                    <div class="chart-container">
+                        <canvas id="productSalesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stacked Bar/Line Chart (Remaining Stock) -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow-lg mt-4">
+                <div class="card-body">
+                    <h4 class="card-title text-center">Remaining Product Stock</h4>
+                    <div class="chart-container">
+                        <canvas id="remainingStockChart"></canvas>
+                    </div>
+                    <div id="restockMessage" class="alert alert-warning mt-3" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 
         <footer class="footer">
           <div class="container-fluid d-flex justify-content-between">
@@ -457,6 +594,90 @@ try {
 
     <!-- Kaiadmin JS -->
     <script src="../../assets/js/kaiadmin.min.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Weekly Sales Chart (Point Styling Chart)
+    new Chart(document.getElementById("salesChart").getContext("2d"), {
+        type: "line",
+        data: {
+            labels: <?php echo $weeklyLabelsJSON; ?>,
+            datasets: [{
+                label: "Total Sales",
+                data: <?php echo $weeklySalesJSON; ?>,
+                borderColor: "#007BFF",
+                backgroundColor: "rgba(0, 123, 255, 0.2)",
+                borderWidth: 2,
+                pointStyle: "circle",
+                pointRadius: 5,
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true }, x: {} }
+        }
+    });
+
+    // Product Sales Chart (Doughnut)
+    new Chart(document.getElementById("productSalesChart").getContext("2d"), {
+        type: "doughnut",
+        data: {
+            labels: <?php echo $productLabelsJSON; ?>,
+            datasets: [{
+                data: <?php echo $productSalesJSON; ?>,
+                backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4CAF50", "#9C27B0"],
+                hoverOffset: 4
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    // Remaining Stock Chart (Stacked Bar)
+    new Chart(document.getElementById("remainingStockChart").getContext("2d"), {
+        type: "bar",
+        data: {
+            labels: <?php echo $stockLabelsJSON; ?>,
+            datasets: [{
+                label: "Remaining Stock",
+                data: <?php echo $stockRemainingJSON; ?>,
+                backgroundColor: "#FF5733"
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+
+    // Display Restock Warnings
+    let restockMessages = <?php echo json_encode($restockWarning); ?>;
+    if (restockMessages.length > 0) {
+        document.getElementById("restockMessage").style.display = "block";
+        document.getElementById("restockMessage").innerHTML = restockMessages.join("<br>");
+    }
+});
+</script>
 
   </body>
 </html>
