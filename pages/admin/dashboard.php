@@ -21,6 +21,38 @@ $useremail = htmlspecialchars($_SESSION['email']);
 // Get today's date
 $today = date('Y-m-d');
 
+try {
+    // Fetch product sales and calculate the average
+    $query = "SELECT p.id, p.product_name, SUM(o.quantity) AS total_quantity, 
+                     AVG(o.quantity) AS average_quantity
+              FROM paid pa
+              JOIN orders o ON pa.order_id = o.id
+              JOIN products p ON o.product_id = p.id
+              WHERE DATE(pa.paid_at) = ?
+              GROUP BY p.id";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([$today]);
+    $salesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Filter products that reached or exceeded the average
+    $productsExceedingAverage = [];
+    foreach ($salesData as $data) {
+        if ($data['total_quantity'] >= $data['average_quantity']) {
+            $productsExceedingAverage[] = [
+                'name' => $data['product_name'],
+                'quantity' => $data['total_quantity']
+            ];
+        }
+    }
+
+    // Pass data to frontend
+    $productCount = count($productsExceedingAverage);
+} catch (PDOException $e) {
+    die("Database query failed: " . $e->getMessage());
+}
+// Get today's date
+$today = date('Y-m-d');
+
 // Get the current date's weekday (0 for Sunday, 6 for Saturday)
 $weekday = date('w', strtotime($today));
 
